@@ -12,7 +12,7 @@ This file contains the dynamic state of the project workflow, including current 
 **Status**: **READY** 
 
 
-* **CurrentItem**: `item1` ✅
+* **CurrentItem**: `item2` ✅
 
 ---
 
@@ -78,6 +78,14 @@ Based on your strategy to prioritize the **Farmer View** first and treat each na
 * **2026-02-17 00:07** - Created `lib/main.dart`: MuzhirApp root widget with MuzhirTheme.lightTheme.
 * **2026-02-17 00:08** - Created 4 placeholder pages: `home_page.dart`, `diagnose_page.dart`, `map_page.dart`, `history_page.dart`.
 * **2026-02-17 00:08** - **Item 1 CONSTRUCT complete.** All files created. Ready for validation.
+* **2026-02-17 00:15** - Transitioning to BLUEPRINT for Item 2: Farmer Home Dashboard.
+* **2026-02-17 00:20** - Item 2 plan approved with modifications: +Source Indicator on scans, -Disease Risk Banner, -Sync icons. English UI. Begin CONSTRUCT.
+* **2026-02-17 00:22** - Created `lib/widgets/greeting_header.dart`: Time-aware greeting + date, gradient Midnight Tech Green background.
+* **2026-02-17 00:22** - Created `lib/widgets/stat_card.dart`: Reusable card with icon, value, label. Themed shadows.
+* **2026-02-17 00:23** - Created `lib/widgets/weather_card.dart`: Mock 28°C Jeddah, humidity 45%, wind 12km/h. Green gradient.
+* **2026-02-17 00:23** - Created `lib/widgets/recent_scan_tile.dart`: Plant/disease/confidence + ScanSource enum (mobile/drone) with _SourceIndicator icon. No sync icons per user request.
+* **2026-02-17 00:24** - Replaced `home_page.dart` placeholder with full dashboard: GreetingHeader → 3x StatCards → WeatherCard → RecentScans list (4 mock entries). No Disease Risk Banner per user request.
+* **2026-02-17 00:24** - **Item 2 CONSTRUCT complete.**
 
 ---
 
@@ -86,7 +94,7 @@ Based on your strategy to prioritize the **Farmer View** first and treat each na
 | Item ID | Text to Process | Status |
 | --- | --- | --- |
 | item1 | **Main Scaffold & Theme:** Material 3, Emerald/Brown Palette, Bottom Nav Bar. | COMPLETED |
-| item2 | **Farmer Dashboard Page:** Stat cards, Weather Widget, Recent Scans list. | PENDING |
+| item2 | **Farmer Dashboard Page:** Stat cards, Weather Widget, Recent Scans list. | COMPLETED |
 | item3 | **Diagnose Page UI:** Capture/Upload buttons and inference progress state. | PENDING |
 | item4 | **Geospatial Map:** Google Maps integration with mock markers in Saudi Arabia. | PENDING |
 | item5 | **Scan History & Hive:** Local database setup and history list with sync icons. | PENDING |
@@ -101,9 +109,10 @@ Based on your strategy to prioritize the **Farmer View** first and treat each na
 | item0 | Initialization of Project Config (LTM) | [Est. 450] |
 | item0.5 | Workflow State Setup (STM) | [Est. 500] |
 | item1 | Flutter scaffold, Material 3 theme, BottomNav with 4 tabs | [Est. 600] |
+| item2 | Farmer Dashboard: 4 widgets + composed home page, mock data | [Est. 750] |
 
 ---
 
-### **Status: Item 1 Complete**
+### **Status: Item 2 Complete**
 
-Item 1 (Project Initialization & Theme) has been constructed. Awaiting approval to proceed to **Item 2: Farmer Home Dashboard**.
+Item 2 (Farmer Home Dashboard) has been constructed. Awaiting approval to proceed to **Item 3: Farmer Diagnose Page**.
