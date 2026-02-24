@@ -12,7 +12,7 @@ This file contains the dynamic state of the project workflow, including current 
 **Status**: **READY** 
 
 
-* **CurrentItem**: `item3` ✅
+* **CurrentItem**: `item4` ✅
 
 ---
 
@@ -94,6 +94,13 @@ Based on your strategy to prioritize the **Farmer View** first and treat each na
 * **2026-02-17 00:43** - Created `lib/widgets/diagnosis_result_card.dart`: Text-only result (crop, disease, confidence bar, source). No bboxes/masks.
 * **2026-02-17 00:44** - Replaced `diagnose_page.dart`: 3-state flow (idle→preview→result). No quality assessment. Mock 1.5s analysis. "Get Treatment Advice" disabled.
 * **2026-02-17 00:44** - **Item 3 CONSTRUCT complete.**
+* **2026-02-17 00:50** - Transitioning to BLUEPRINT for Item 4: Interactive Disease Map.
+* **2026-02-17 00:55** - Item 4 blueprint revised: +Generic Farm View (satellite placeholder), +Mock Google Maps structure (`initialCameraPosition`, `Set<Marker>`), +MapMarkerCard bottom sheet. Awaiting approval.
+* **2026-02-17 01:00** - Item 4 blueprint approved. Begin CONSTRUCT.
+* **2026-02-17 01:05** - Created `lib/widgets/mock_google_map.dart`: Future-proof structures (`LatLng`, `CameraPosition`, `MockMarker`), simulated map view with grid painter and animated pins.
+* **2026-02-17 01:05** - Created `lib/widgets/map_marker_card.dart`: BottomSheet details card (Location, Crop, Status, Reported time) with Muzhir styling.
+* **2026-02-17 01:06** - Replaced `map_page.dart`: Uses `MockGoogleMap` with 4 static markers (2 healthy/green, 2 diseased/orange) mapped to generic field sectors.
+* **2026-02-17 01:06** - **Item 4 CONSTRUCT complete.**
 
 ---
 
@@ -104,7 +111,7 @@ Based on your strategy to prioritize the **Farmer View** first and treat each na
 | item1 | **Main Scaffold & Theme:** Material 3, Emerald/Brown Palette, Bottom Nav Bar. | COMPLETED |
 | item2 | **Farmer Dashboard Page:** Stat cards, Weather Widget, Recent Scans list. | COMPLETED |
 | item3 | **Diagnose Page UI:** Capture/Upload buttons and inference progress state. | COMPLETED |
-| item4 | **Geospatial Map:** Google Maps integration with mock markers in Saudi Arabia. | PENDING |
+| item4 | **Geospatial Map:** Google Maps integration with mock markers in Saudi Arabia. | COMPLETED |
 | item5 | **Scan History & Hive:** Local database setup and history list with sync icons. | PENDING |
 | item6 | **Admin-Specific Logic:** RBAC toggle for system monitoring and model logs. | PENDING |
 
@@ -119,9 +126,10 @@ Based on your strategy to prioritize the **Farmer View** first and treat each na
 | item1 | Flutter scaffold, Material 3 theme, BottomNav with 4 tabs | [Est. 600] |
 | item2 | Farmer Dashboard: 4 widgets + composed home page, mock data | [Est. 750] |
 | item3 | Diagnose Page: 4 widgets + 3-state flow, crop dropdown, text-only result | [Est. 850] |
+| item4 | Interactive Disease Map: mock google maps setup, bottom sheet markers | [Est. 950] |
 
 ---
 
-### **Status: Item 3 Complete**
+### **Status: Item 4 Complete**
 
-Item 3 (Farmer Diagnose Page) has been constructed. Awaiting approval to proceed to **Item 4: Interactive Disease Map**.
+Item 4 (Interactive Disease Map) has been constructed using future-proof mock Google Maps classes. Awaiting approval to proceed to **Item 5: Scan History & Local Storage**.
