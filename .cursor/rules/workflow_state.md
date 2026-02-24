@@ -12,7 +12,7 @@ This file contains the dynamic state of the project workflow, including current 
 **Status**: **READY** 
 
 
-* **CurrentItem**: `item2` ✅
+* **CurrentItem**: `item3` ✅
 
 ---
 
@@ -86,6 +86,14 @@ Based on your strategy to prioritize the **Farmer View** first and treat each na
 * **2026-02-17 00:23** - Created `lib/widgets/recent_scan_tile.dart`: Plant/disease/confidence + ScanSource enum (mobile/drone) with _SourceIndicator icon. No sync icons per user request.
 * **2026-02-17 00:24** - Replaced `home_page.dart` placeholder with full dashboard: GreetingHeader → 3x StatCards → WeatherCard → RecentScans list (4 mock entries). No Disease Risk Banner per user request.
 * **2026-02-17 00:24** - **Item 2 CONSTRUCT complete.**
+* **2026-02-17 00:30** - Transitioning to BLUEPRINT for Item 3: Farmer Diagnose Page.
+* **2026-02-17 00:40** - Item 3 blueprint revised: +Crop Type dropdown (Tomato only), -Image Quality Assessment, -Bounding boxes/masks (text-only results). Approved. Begin CONSTRUCT.
+* **2026-02-17 00:42** - Created `lib/widgets/capture_option_card.dart`: Reusable tappable card (Camera, Gallery, Drone).
+* **2026-02-17 00:42** - Created `lib/widgets/image_preview_box.dart`: Dashed empty state + mock preview with remove button.
+* **2026-02-17 00:43** - Created `lib/widgets/crop_type_dropdown.dart`: DropdownButtonFormField, V1 = Tomato only.
+* **2026-02-17 00:43** - Created `lib/widgets/diagnosis_result_card.dart`: Text-only result (crop, disease, confidence bar, source). No bboxes/masks.
+* **2026-02-17 00:44** - Replaced `diagnose_page.dart`: 3-state flow (idle→preview→result). No quality assessment. Mock 1.5s analysis. "Get Treatment Advice" disabled.
+* **2026-02-17 00:44** - **Item 3 CONSTRUCT complete.**
 
 ---
 
@@ -95,7 +103,7 @@ Based on your strategy to prioritize the **Farmer View** first and treat each na
 | --- | --- | --- |
 | item1 | **Main Scaffold & Theme:** Material 3, Emerald/Brown Palette, Bottom Nav Bar. | COMPLETED |
 | item2 | **Farmer Dashboard Page:** Stat cards, Weather Widget, Recent Scans list. | COMPLETED |
-| item3 | **Diagnose Page UI:** Capture/Upload buttons and inference progress state. | PENDING |
+| item3 | **Diagnose Page UI:** Capture/Upload buttons and inference progress state. | COMPLETED |
 | item4 | **Geospatial Map:** Google Maps integration with mock markers in Saudi Arabia. | PENDING |
 | item5 | **Scan History & Hive:** Local database setup and history list with sync icons. | PENDING |
 | item6 | **Admin-Specific Logic:** RBAC toggle for system monitoring and model logs. | PENDING |
@@ -110,9 +118,10 @@ Based on your strategy to prioritize the **Farmer View** first and treat each na
 | item0.5 | Workflow State Setup (STM) | [Est. 500] |
 | item1 | Flutter scaffold, Material 3 theme, BottomNav with 4 tabs | [Est. 600] |
 | item2 | Farmer Dashboard: 4 widgets + composed home page, mock data | [Est. 750] |
+| item3 | Diagnose Page: 4 widgets + 3-state flow, crop dropdown, text-only result | [Est. 850] |
 
 ---
 
-### **Status: Item 2 Complete**
+### **Status: Item 3 Complete**
 
-Item 2 (Farmer Home Dashboard) has been constructed. Awaiting approval to proceed to **Item 3: Farmer Diagnose Page**.
+Item 3 (Farmer Diagnose Page) has been constructed. Awaiting approval to proceed to **Item 4: Interactive Disease Map**.
