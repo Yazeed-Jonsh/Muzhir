@@ -40,3 +40,8 @@ Thumbs.db
 .env.*
 credentials.json
 *.key
+
+# Firebase config (keep local, not in git)
+mobile_app/android/app/google-services.json
+mobile_app/firebase.json
+mobile_app/lib/firebase_options.dart
