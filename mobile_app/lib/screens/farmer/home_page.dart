@@ -55,10 +55,10 @@ class FarmerHomePage extends StatelessWidget {
           const SizedBox(height: 20),
 
           // ── Quick Stats Row ──────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
             child: Row(
-              children: const [
+              children: [
                 StatCard(
                   icon: Icons.document_scanner_rounded,
                   value: '12',

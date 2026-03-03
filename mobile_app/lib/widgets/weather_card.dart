@@ -11,7 +11,7 @@ class WeatherCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
+        gradient: const LinearGradient(
           colors: [
             MuzhirColors.coreLeafGreen,
             MuzhirColors.vividSprout,
@@ -63,7 +63,7 @@ class WeatherCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    Icon(
+                    const Icon(
                       Icons.location_on_outlined,
                       size: 16,
                       color: MuzhirColors.luminousLime,
@@ -79,14 +79,14 @@ class WeatherCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 // Detail chips
-                Row(
+                const Row(
                   children: [
                     _WeatherDetail(
                       icon: Icons.water_drop_outlined,
                       value: '45%',
                       label: 'Humidity',
                     ),
-                    const SizedBox(width: 16),
+                    SizedBox(width: 16),
                     _WeatherDetail(
                       icon: Icons.air,
                       value: '12 km/h',

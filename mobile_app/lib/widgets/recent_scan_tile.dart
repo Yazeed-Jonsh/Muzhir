@@ -60,7 +60,7 @@ class RecentScanTile extends StatelessWidget {
               color: MuzhirColors.luminousLime.withValues(alpha: 0.25),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(
+            child: const Icon(
               Icons.local_florist_rounded,
               color: MuzhirColors.coreLeafGreen,
               size: 28,

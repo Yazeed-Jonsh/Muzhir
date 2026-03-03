@@ -43,8 +43,8 @@ class _MainScaffoldState extends State<MainScaffold> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_titles[_currentIndex]),
-        leading: Padding(
-          padding: const EdgeInsets.all(8.0),
+        leading: const Padding(
+          padding: EdgeInsets.all(8.0),
           child: Icon(
             Icons.eco_rounded,
             color: MuzhirColors.luminousLime,

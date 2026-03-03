@@ -47,7 +47,7 @@ class DiagnosisResultCard extends StatelessWidget {
           // Header
           Row(
             children: [
-              Icon(
+              const Icon(
                 Icons.biotech_rounded,
                 color: MuzhirColors.coreLeafGreen,
                 size: 22,
