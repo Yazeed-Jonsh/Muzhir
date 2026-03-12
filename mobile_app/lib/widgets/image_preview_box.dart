@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:muzhir/config/app_theme.dart';
 
@@ -6,14 +8,21 @@ class ImagePreviewBox extends StatelessWidget {
   const ImagePreviewBox({
     super.key,
     required this.hasImage,
+    this.imageFile,
     this.onRemove,
   });
 
   /// Whether an image has been selected (mock).
   final bool hasImage;
 
+  /// The selected image file to display; when non-null, shows Image.file.
+  final File? imageFile;
+
   /// Called when the user taps the remove button.
   final VoidCallback? onRemove;
+
+  /// True when we have an actual image file to display (avoids showing preview UI with "No image loaded").
+  bool get _hasDisplayableImage => hasImage && imageFile != null;
 
   @override
   Widget build(BuildContext context) {
@@ -21,15 +30,15 @@ class ImagePreviewBox extends StatelessWidget {
       width: double.infinity,
       height: 220,
       decoration: BoxDecoration(
-        color: hasImage
+        color: _hasDisplayableImage
             ? MuzhirColors.midnightTechGreen.withValues(alpha: 0.05)
             : MuzhirColors.white,
         borderRadius: BorderRadius.circular(20),
-        border: hasImage
+        border: _hasDisplayableImage
             ? Border.all(color: MuzhirColors.coreLeafGreen.withValues(alpha: 0.3), width: 1.5)
             : null,
       ),
-      child: hasImage ? _buildPreview(context) : _buildEmpty(context),
+      child: _hasDisplayableImage ? _buildPreview(context) : _buildEmpty(context),
     );
   }
 
@@ -70,27 +79,16 @@ class ImagePreviewBox extends StatelessWidget {
   }
 
   Widget _buildPreview(BuildContext context) {
+    assert(imageFile != null, '_buildPreview is only used when _hasDisplayableImage is true');
     return Stack(
       children: [
-        // Mock image placeholder
-        Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.image_rounded,
-                size: 64,
-                color: MuzhirColors.coreLeafGreen.withValues(alpha: 0.5),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Plant image selected',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: MuzhirColors.coreLeafGreen,
-                      fontWeight: FontWeight.w500,
-                    ),
-              ),
-            ],
+        ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Image.file(
+            imageFile!,
+            fit: BoxFit.cover,
+            width: double.infinity,
+            height: double.infinity,
           ),
         ),
         // Remove button

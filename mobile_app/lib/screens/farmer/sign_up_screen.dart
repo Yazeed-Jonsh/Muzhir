@@ -103,14 +103,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          Icons.eco,
-                          size: 56,
-                          color: greenDark,
+                        Image.asset(
+                          'assets/logos/muzhir_logo.jpeg',
+                          height: 56,
+                          fit: BoxFit.contain,
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'AgriLog',
+                          'Muzhir',
                           style: TextStyle(
                             fontSize: 26,
                             fontWeight: FontWeight.bold,

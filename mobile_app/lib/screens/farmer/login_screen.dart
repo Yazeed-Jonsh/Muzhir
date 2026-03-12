@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
+import 'sign_up_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -86,14 +87,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          Icons.eco,
-                          size: 56,
-                          color: greenDark,
+                        Image.asset(
+                          'assets/logos/muzhir_logo.jpeg',
+                          height: 56,
+                          fit: BoxFit.contain,
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'AgriLog',
+                          'Muzhir',
                           style: TextStyle(
                             fontSize: 26,
                             fontWeight: FontWeight.bold,
@@ -158,6 +159,54 @@ class _LoginScreenState extends State<LoginScreen> {
                             return null;
                           },
                         ),
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: () async {
+                              final email = _emailController.text.trim();
+                              if (email.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Please enter your email first'),
+                                  ),
+                                );
+                                return;
+                              }
+                              try {
+                                await AuthService().sendPasswordReset(email);
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Password reset email sent!'),
+                                  ),
+                                );
+                              } catch (e) {
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      e.toString().replaceFirst('Exception: ', ''),
+                                    ),
+                                    backgroundColor: Colors.red.shade700,
+                                  ),
+                                );
+                              }
+                            },
+                            style: TextButton.styleFrom(
+                              padding: EdgeInsets.zero,
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: Text(
+                              'Forgot Password?',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: greenDark.withOpacity(0.9),
+                              ),
+                            ),
+                          ),
+                        ),
                         const SizedBox(height: 24),
                         SizedBox(
                           width: double.infinity,
@@ -186,7 +235,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 20),
                         TextButton(
                           onPressed: () {
-                            // TODO: Navigate to Sign Up screen, e.g. Navigator.pushNamed(context, '/signup');
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const SignUpScreen(),
+                              ),
+                            );
                           },
                           child: RichText(
                             text: TextSpan(

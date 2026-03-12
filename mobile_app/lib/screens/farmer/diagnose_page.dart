@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:muzhir/config/app_theme.dart';
 import 'package:muzhir/widgets/capture_option_card.dart';
 import 'package:muzhir/widgets/image_preview_box.dart';
@@ -23,19 +26,49 @@ class _DiagnosePageState extends State<DiagnosePage> {
   ScanSource _selectedSource = ScanSource.mobile;
   String? _selectedCrop;
   bool _isAnalyzing = false;
+  File? _selectedImage;
+  final ImagePicker _picker = ImagePicker();
 
-  void _onCaptureSelected(ScanSource source) {
-    setState(() {
-      _selectedSource = source;
-      _selectedCrop = 'Tomato';
-      _state = _DiagnoseState.preview;
-    });
+  static ScanSource _scanSourceFromImageSource(ImageSource source) {
+    switch (source) {
+      case ImageSource.camera:
+        return ScanSource.mobile;
+      case ImageSource.gallery:
+        return ScanSource.mobile;
+    }
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    final XFile? pickedFile = await _picker.pickImage(source: source);
+    if (pickedFile != null && mounted) {
+      setState(() {
+        _selectedImage = File(pickedFile.path);
+        _selectedSource = _scanSourceFromImageSource(source);
+        _selectedCrop = 'Tomato';
+        _state = _DiagnoseState.preview;
+      });
+    }
+  }
+
+  /// Picks an image from gallery to use as an imported drone scan.
+  /// Only enters preview when a file is actually selected.
+  Future<void> _pickImageForDrone() async {
+    final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery);
+    if (pickedFile != null && mounted) {
+      setState(() {
+        _selectedImage = File(pickedFile.path);
+        _selectedSource = ScanSource.drone;
+        _selectedCrop = 'Tomato';
+        _state = _DiagnoseState.preview;
+      });
+    }
   }
 
   void _onRemoveImage() {
     setState(() {
       _state = _DiagnoseState.idle;
       _selectedCrop = null;
+      _selectedImage = null;
       _isAnalyzing = false;
     });
   }
@@ -59,6 +92,7 @@ class _DiagnosePageState extends State<DiagnosePage> {
     setState(() {
       _state = _DiagnoseState.idle;
       _selectedCrop = null;
+      _selectedImage = null;
       _isAnalyzing = false;
     });
   }
@@ -88,6 +122,7 @@ class _DiagnosePageState extends State<DiagnosePage> {
           // Image preview box (all states)
           ImagePreviewBox(
             hasImage: _state != _DiagnoseState.idle,
+            imageFile: _selectedImage,
             onRemove: _state == _DiagnoseState.preview ? _onRemoveImage : null,
           ),
           const SizedBox(height: 20),
@@ -122,14 +157,14 @@ class _DiagnosePageState extends State<DiagnosePage> {
               icon: Icons.camera_alt_rounded,
               title: 'Camera',
               subtitle: 'Take photo',
-              onTap: () => _onCaptureSelected(ScanSource.mobile),
+              onTap: () => _pickImage(ImageSource.camera),
             ),
             const SizedBox(width: 12),
             CaptureOptionCard(
               icon: Icons.photo_library_rounded,
               title: 'Gallery',
               subtitle: 'Choose file',
-              onTap: () => _onCaptureSelected(ScanSource.mobile),
+              onTap: () => _pickImage(ImageSource.gallery),
             ),
             const SizedBox(width: 12),
             CaptureOptionCard(
@@ -137,7 +172,7 @@ class _DiagnosePageState extends State<DiagnosePage> {
               title: 'Drone',
               subtitle: 'Import scan',
               iconColor: MuzhirColors.midnightTechGreen,
-              onTap: () => _onCaptureSelected(ScanSource.drone),
+              onTap: _pickImageForDrone,
             ),
           ],
         ),

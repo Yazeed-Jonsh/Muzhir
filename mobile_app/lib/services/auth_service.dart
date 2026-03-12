@@ -64,6 +64,23 @@ class AuthService {
     }
   }
 
+  /// Sends a password reset email to [email].
+  /// Throws [FirebaseAuthException] on failure (e.g. user-not-found, invalid-email).
+  Future<void> sendPasswordReset(String email) async {
+    try {
+      await _auth.sendPasswordResetEmail(email: email);
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'user-not-found') {
+        print('AuthService.sendPasswordReset: user-not-found - ${e.message}');
+      } else if (e.code == 'invalid-email') {
+        print('AuthService.sendPasswordReset: invalid-email - ${e.message}');
+      } else {
+        print('AuthService.sendPasswordReset: ${e.code} - ${e.message}');
+      }
+      rethrow;
+    }
+  }
+
   /// Signs out the current user.
   Future<void> signOut() async {
     await _auth.signOut();

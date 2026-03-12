@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:muzhir/config/app_theme.dart';
+import 'package:muzhir/services/auth_service.dart';
 import 'package:muzhir/screens/farmer/home_page.dart';
 import 'package:muzhir/screens/farmer/diagnose_page.dart';
 import 'package:muzhir/screens/farmer/map_page.dart';
@@ -62,6 +63,12 @@ class _MainScaffoldState extends State<MainScaffold> {
             icon: const Icon(Icons.person_outline_rounded),
             onPressed: () {
               // TODO: Profile / Settings – future sprint
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await AuthService().signOut();
             },
           ),
         ],

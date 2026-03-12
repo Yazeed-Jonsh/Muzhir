@@ -60,7 +60,9 @@ class MockGoogleMap extends StatelessWidget {
           height: constraints.maxHeight,
           decoration: BoxDecoration(
             color: MuzhirColors.vividSprout.withValues(alpha: 0.15),
+           
             // Mock satellite "farm" texture background
+            /*
             image: const DecorationImage(
               image: AssetImage('assets/images/mock_farm_bg.png'),
               fit: BoxFit.cover,
@@ -69,7 +71,9 @@ class MockGoogleMap extends StatelessWidget {
                 BlendMode.darken,
               ),
             ),
+            */
           ),
+          
           child: Stack(
             children: [
               // Draw "field" grid lines as a placeholder for satellite imagery
