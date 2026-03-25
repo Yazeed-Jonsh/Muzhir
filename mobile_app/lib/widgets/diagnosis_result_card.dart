@@ -13,6 +13,8 @@ class DiagnosisResultCard extends StatelessWidget {
     required this.confidencePercent,
     required this.source,
     this.isHealthy = false,
+    this.latitude,
+    this.longitude,
   });
 
   final String cropType;
@@ -20,6 +22,9 @@ class DiagnosisResultCard extends StatelessWidget {
   final int confidencePercent;
   final ScanSource source;
   final bool isHealthy;
+  /// Capture location from geolocator at scan time, if available.
+  final double? latitude;
+  final double? longitude;
 
   @override
   Widget build(BuildContext context) {
@@ -142,6 +147,29 @@ class DiagnosisResultCard extends StatelessWidget {
               ),
             ],
           ),
+          if (latitude != null && longitude != null) ...[
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.location_on_outlined,
+                  size: 18,
+                  color: MuzhirColors.coreLeafGreen.withValues(alpha: 0.7),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Location: ${latitude!.toStringAsFixed(5)}, ${longitude!.toStringAsFixed(5)}',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: MuzhirColors.deepCharcoal.withValues(alpha: 0.6),
+                          fontWeight: FontWeight.w500,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

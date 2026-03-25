@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:muzhir/config/app_theme.dart';
 import 'package:muzhir/widgets/capture_option_card.dart';
@@ -29,6 +30,10 @@ class _DiagnosePageState extends State<DiagnosePage> {
   File? _selectedImage;
   final ImagePicker _picker = ImagePicker();
 
+  /// Location captured when an image is picked for diagnosis (null if unavailable).
+  double? _diagnosisLatitude;
+  double? _diagnosisLongitude;
+
   static ScanSource _scanSourceFromImageSource(ImageSource source) {
     switch (source) {
       case ImageSource.camera:
@@ -38,9 +43,62 @@ class _DiagnosePageState extends State<DiagnosePage> {
     }
   }
 
+  /// Resolves location permission and reads the current [Position].
+  /// Updates [_diagnosisLatitude] and [_diagnosisLongitude], or clears them on failure.
+  Future<void> _getCurrentLocation() async {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      if (mounted) {
+        setState(() {
+          _diagnosisLatitude = null;
+          _diagnosisLongitude = null;
+        });
+      }
+      return;
+    }
+
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      if (mounted) {
+        setState(() {
+          _diagnosisLatitude = null;
+          _diagnosisLongitude = null;
+        });
+      }
+      return;
+    }
+
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+      if (mounted) {
+        setState(() {
+          _diagnosisLatitude = position.latitude;
+          _diagnosisLongitude = position.longitude;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _diagnosisLatitude = null;
+          _diagnosisLongitude = null;
+        });
+      }
+    }
+  }
+
   Future<void> _pickImage(ImageSource source) async {
     final XFile? pickedFile = await _picker.pickImage(source: source);
     if (pickedFile != null && mounted) {
+      await _getCurrentLocation();
+      if (!mounted) return;
       setState(() {
         _selectedImage = File(pickedFile.path);
         _selectedSource = _scanSourceFromImageSource(source);
@@ -55,6 +113,8 @@ class _DiagnosePageState extends State<DiagnosePage> {
   Future<void> _pickImageForDrone() async {
     final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null && mounted) {
+      await _getCurrentLocation();
+      if (!mounted) return;
       setState(() {
         _selectedImage = File(pickedFile.path);
         _selectedSource = ScanSource.drone;
@@ -70,6 +130,8 @@ class _DiagnosePageState extends State<DiagnosePage> {
       _selectedCrop = null;
       _selectedImage = null;
       _isAnalyzing = false;
+      _diagnosisLatitude = null;
+      _diagnosisLongitude = null;
     });
   }
 
@@ -94,6 +156,8 @@ class _DiagnosePageState extends State<DiagnosePage> {
       _selectedCrop = null;
       _selectedImage = null;
       _isAnalyzing = false;
+      _diagnosisLatitude = null;
+      _diagnosisLongitude = null;
     });
   }
 
@@ -249,6 +313,8 @@ class _DiagnosePageState extends State<DiagnosePage> {
           diseaseName: 'Early Blight',
           confidencePercent: 87,
           source: _selectedSource,
+          latitude: _diagnosisLatitude,
+          longitude: _diagnosisLongitude,
         ),
         const SizedBox(height: 16),
 

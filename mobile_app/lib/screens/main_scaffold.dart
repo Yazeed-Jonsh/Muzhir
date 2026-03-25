@@ -19,13 +19,6 @@ class MainScaffold extends StatefulWidget {
 class _MainScaffoldState extends State<MainScaffold> {
   int _currentIndex = 0;
 
-  static const List<Widget> _pages = [
-    FarmerHomePage(),
-    DiagnosePage(),
-    MapPage(),
-    HistoryPage(),
-  ];
-
   static const List<String> _titles = [
     'Muzhir',
     'Diagnose',
@@ -75,7 +68,12 @@ class _MainScaffoldState extends State<MainScaffold> {
       ),
       body: IndexedStack(
         index: _currentIndex,
-        children: _pages,
+        children: [
+          const FarmerHomePage(),
+          const DiagnosePage(),
+          MapPage(isTabVisible: _currentIndex == 2),
+          const HistoryPage(),
+        ],
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
