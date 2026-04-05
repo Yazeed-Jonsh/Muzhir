@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:muzhir/config/app_theme.dart';
+import 'package:muzhir/theme/app_theme.dart';
 
 /// Dropdown for selecting crop type before analysis.
 /// V1: only "Tomato" is available.

@@ -2,8 +2,106 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:muzhir/config/app_theme.dart';
+import 'package:muzhir/theme/app_theme.dart';
 import 'package:muzhir/widgets/map_marker_card.dart';
+
+// ── Fake field reports (Jeddah) — replace with Firestore later ─────────────
+
+/// Healthy vs diseased scan status for map mock data.
+enum _MockReportStatus { healthy, diseased }
+
+/// One map pin’s backing data before Firebase (matches intended Firestore shape).
+class _MockMapReport {
+  const _MockMapReport({
+    required this.id,
+    required this.position,
+    required this.plantName,
+    required this.status,
+    required this.timestamp,
+  });
+
+  final String id;
+  final LatLng position;
+  final String plantName;
+  final _MockReportStatus status;
+  final DateTime timestamp;
+}
+
+/// Parcel / sector labels for bottom sheet (keyed by [_MockMapReport.id]).
+const Map<String, String> _mockReportLocationTitles = {
+  'jed-001': 'Al-Hamra',
+  'jed-002': 'Al-Shati',
+  'jed-003': 'Al-Rawdah',
+  'jed-004': 'Obhur',
+  'jed-005': 'Al-Balad',
+};
+
+/// Disease diagnosis label when status is diseased (keyed by report id).
+const Map<String, String> _mockReportDiseaseLabels = {
+  'jed-001': 'Early Blight',
+  'jed-003': 'Leaf Rust',
+  'jed-005': 'Powdery Mildew',
+};
+
+String _statusLineForReport(_MockMapReport r) {
+  if (r.status == _MockReportStatus.healthy) return 'Healthy';
+  return _mockReportDiseaseLabels[r.id] ?? 'Diseased';
+}
+
+String _relativeTime(DateTime past) {
+  final d = DateTime.now().difference(past);
+  if (d.inSeconds < 60) return 'Just now';
+  if (d.inMinutes < 60) return '${d.inMinutes} min ago';
+  if (d.inHours < 24) {
+    final h = d.inHours;
+    return h == 1 ? '1 hour ago' : '$h hours ago';
+  }
+  if (d.inDays < 7) {
+    final days = d.inDays;
+    return days == 1 ? 'Yesterday' : '$days days ago';
+  }
+  if (d.inDays < 30) return '${d.inDays ~/ 7} weeks ago';
+  return '${d.inDays ~/ 30} months ago';
+}
+
+/// Five synthetic field reports in Jeddah (mock data until Firestore).
+final List<_MockMapReport> _mockReports = [
+  _MockMapReport(
+    id: 'jed-001',
+    position: const LatLng(21.5160, 39.1650),
+    plantName: 'Tomato',
+    status: _MockReportStatus.diseased,
+    timestamp: DateTime.now().subtract(const Duration(hours: 2)),
+  ),
+  _MockMapReport(
+    id: 'jed-002',
+    position: const LatLng(21.5850, 39.1200),
+    plantName: 'Date palm',
+    status: _MockReportStatus.healthy,
+    timestamp: DateTime.now().subtract(const Duration(days: 1)),
+  ),
+  _MockMapReport(
+    id: 'jed-003',
+    position: const LatLng(21.5580, 39.1680),
+    plantName: 'Wheat',
+    status: _MockReportStatus.diseased,
+    timestamp: DateTime.now().subtract(const Duration(days: 3)),
+  ),
+  _MockMapReport(
+    id: 'jed-004',
+    position: const LatLng(21.7100, 39.1250),
+    plantName: 'Date palm',
+    status: _MockReportStatus.healthy,
+    timestamp: DateTime.now().subtract(const Duration(minutes: 45)),
+  ),
+  _MockMapReport(
+    id: 'jed-005',
+    position: const LatLng(21.4850, 39.1850),
+    plantName: 'Grapes',
+    status: _MockReportStatus.diseased,
+    timestamp: DateTime.now().subtract(const Duration(hours: 18)),
+  ),
+];
 
 /// Farmer Disease Map Page.
 /// Displays an OpenStreetMap view with markers for disease/health status
@@ -19,13 +117,13 @@ class MapPage extends StatefulWidget {
 }
 
 class _MapPageState extends State<MapPage> {
-  /// Fallback center (Taif region) while GPS is loading or unavailable.
-  static const LatLng _defaultCenter = LatLng(21.2703, 40.4158);
+  /// Fallback center (Jeddah) while GPS is loading or unavailable.
+  static const LatLng _defaultCenter = LatLng(21.5433, 39.1728);
   static const double _initialZoom = 11.0;
-  static const double _userLocationZoom = 15.0;
+  /// Street-level zoom when centering on the user (My Location FAB & first GPS fix).
+  static const double _userLocationZoom = 15.5;
 
   late final MapController _mapController;
-  late final List<_MapMarkerData> _markers;
 
   LatLng? _userLocation;
   bool _locationLoading = false;
@@ -35,7 +133,6 @@ class _MapPageState extends State<MapPage> {
   void initState() {
     super.initState();
     _mapController = MapController();
-    _initMarkers();
     if (widget.isTabVisible) {
       _refreshUserLocation(autoCenterOnFirstFix: true);
     }
@@ -53,44 +150,6 @@ class _MapPageState extends State<MapPage> {
   void dispose() {
     _mapController.dispose();
     super.dispose();
-  }
-
-  void _initMarkers() {
-    _markers = [
-      _MapMarkerData(
-        point: const LatLng(21.2850, 40.4080),
-        color: const Color(0xFFD4790E), // Orange – serious infection
-        onTap: () => _showMarkerDetails(
-          locationName: 'Sector A - North',
-          cropType: 'Tomato',
-          diseaseName: 'Early Blight',
-          timeAgo: '2 hours ago',
-          isHealthy: false,
-        ),
-      ),
-      _MapMarkerData(
-        point: const LatLng(21.2550, 40.4280),
-        color: MuzhirColors.coreLeafGreen, // Green – healthy
-        onTap: () => _showMarkerDetails(
-          locationName: 'Sector B - East',
-          cropType: 'Date Palm',
-          diseaseName: 'Healthy',
-          timeAgo: 'Yesterday',
-          isHealthy: true,
-        ),
-      ),
-      _MapMarkerData(
-        point: const LatLng(21.2620, 40.3980),
-        color: const Color(0xFFD4790E), // Orange – serious infection
-        onTap: () => _showMarkerDetails(
-          locationName: 'Sector C - South West',
-          cropType: 'Wheat',
-          diseaseName: 'Leaf Rust',
-          timeAgo: '3 days ago',
-          isHealthy: false,
-        ),
-      ),
-    ];
   }
 
   Future<void> _refreshUserLocation({bool autoCenterOnFirstFix = false}) async {
@@ -164,32 +223,44 @@ class _MapPageState extends State<MapPage> {
       await _refreshUserLocation(autoCenterOnFirstFix: false);
       if (!mounted || _userLocation == null) return;
     }
-    final target = _userLocation!;
-    double zoom = _userLocationZoom;
-    try {
-      zoom = _mapController.camera.zoom;
-    } catch (_) {}
-    _animateMapTo(target, zoom: zoom.clamp(3.0, 18.0));
+    _animateMapTo(_userLocation!, zoom: _userLocationZoom);
   }
 
-  void _showMarkerDetails({
-    required String locationName,
-    required String cropType,
-    required String diseaseName,
-    required String timeAgo,
-    required bool isHealthy,
-  }) {
+  /// Fits the five mock Jeddah report pins in view (with padding for FAB / chrome).
+  void _fitAllMarkersVisible() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final points = _mockReports.map((r) => r.position).toList();
+      if (points.isEmpty) return;
+      try {
+        if (points.length == 1) {
+          _mapController.move(points.first, 13);
+          return;
+        }
+        _mapController.fitCamera(
+          CameraFit.coordinates(
+            coordinates: points,
+            padding: const EdgeInsets.fromLTRB(40, 40, 40, 100),
+            minZoom: 3,
+            maxZoom: 18,
+          ),
+        );
+      } catch (_) {}
+    });
+  }
+
+  void _showReportSheet(_MockMapReport report) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) {
         return MapMarkerCard(
-          locationName: locationName,
-          cropType: cropType,
-          diseaseName: diseaseName,
-          timeAgo: timeAgo,
-          isHealthy: isHealthy,
+          locationName: _mockReportLocationTitles[report.id] ?? report.id,
+          cropType: report.plantName,
+          diseaseName: _statusLineForReport(report),
+          timeAgo: _relativeTime(report.timestamp),
+          isHealthy: report.status == _MockReportStatus.healthy,
         );
       },
     );
@@ -197,6 +268,9 @@ class _MapPageState extends State<MapPage> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final mapBlue = Theme.of(context).extension<MuzhirFeatureColors>()!.mapUserLocationBlue;
+
     return Column(
       children: [
         Expanded(
@@ -207,6 +281,7 @@ class _MapPageState extends State<MapPage> {
                 options: const MapOptions(
                   initialCenter: _defaultCenter,
                   initialZoom: _initialZoom,
+                  minZoom: 3.0,
                   interactionOptions: InteractionOptions(
                     flags: InteractiveFlag.all,
                   ),
@@ -217,18 +292,21 @@ class _MapPageState extends State<MapPage> {
                     userAgentPackageName: 'com.example.muzhir',
                   ),
                   MarkerLayer(
-                    markers: _markers.map((data) {
+                    markers: _mockReports.map((report) {
+                      final markerColor = report.status == _MockReportStatus.healthy
+                          ? MuzhirColors.darkOliveGreen
+                          : MuzhirColors.earthyClayRed;
                       return Marker(
-                        point: data.point,
+                        point: report.position,
                         width: 48,
                         height: 48,
                         alignment: Alignment.topCenter,
                         child: GestureDetector(
-                          onTap: data.onTap,
+                          onTap: () => _showReportSheet(report),
                           child: Icon(
                             Icons.location_on_rounded,
                             size: 44,
-                            color: data.color,
+                            color: markerColor,
                             shadows: [
                               Shadow(
                                 color: Colors.black.withValues(alpha: 0.35),
@@ -249,17 +327,17 @@ class _MapPageState extends State<MapPage> {
                           width: 28,
                           height: 28,
                           alignment: Alignment.center,
-                          child: _UserLocationDot(),
+                          child: _UserLocationDot(mapBlue: mapBlue),
                         ),
                       ],
                     ),
-                  const RichAttributionWidget(
+                  RichAttributionWidget(
                     alignment: AttributionAlignment.bottomRight,
-                    popupInitialDisplayDuration: Duration(seconds: 3),
-                    animationConfig: ScaleRAWA(),
+                    popupInitialDisplayDuration: const Duration(seconds: 3),
+                    animationConfig: const ScaleRAWA(),
                     showFlutterMapAttribution: false,
-                    popupBackgroundColor: MuzhirColors.surface,
-                    attributions: [
+                    popupBackgroundColor: scheme.surface,
+                    attributions: const [
                       TextSourceAttribution('© OpenStreetMap contributors'),
                     ],
                   ),
@@ -273,7 +351,7 @@ class _MapPageState extends State<MapPage> {
                   child: Center(
                     child: Material(
                       elevation: 3,
-                      color: MuzhirColors.white,
+                      color: Theme.of(context).cardTheme.color ?? scheme.surface,
                       borderRadius: BorderRadius.circular(24),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
@@ -283,19 +361,19 @@ class _MapPageState extends State<MapPage> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const SizedBox(
+                            SizedBox(
                               width: 20,
                               height: 20,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2.5,
-                                color: MuzhirColors.coreLeafGreen,
+                                color: scheme.primary,
                               ),
                             ),
                             const SizedBox(width: 12),
                             Text(
                               'Finding your location…',
                               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: MuzhirColors.deepCharcoal,
+                                    color: scheme.onSurface,
                                     fontWeight: FontWeight.w500,
                                   ),
                             ),
@@ -308,11 +386,24 @@ class _MapPageState extends State<MapPage> {
               Positioned(
                 right: 16,
                 bottom: 56,
-                child: FloatingActionButton(
-                  onPressed: _locationLoading ? null : _onRecenterOnUserPressed,
-                  backgroundColor: MuzhirColors.coreLeafGreen,
-                  foregroundColor: MuzhirColors.white,
-                  child: const Icon(Icons.my_location_rounded),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    FloatingActionButton(
+                      heroTag: 'map_fit_all_markers',
+                      onPressed: _fitAllMarkersVisible,
+                      tooltip: 'Show all markers',
+                      child: const Icon(Icons.zoom_out_map),
+                    ),
+                    const SizedBox(height: 12),
+                    FloatingActionButton(
+                      heroTag: 'map_recenter_user',
+                      onPressed: _locationLoading ? null : _onRecenterOnUserPressed,
+                      tooltip: 'My location',
+                      child: const Icon(Icons.my_location_rounded),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -325,18 +416,23 @@ class _MapPageState extends State<MapPage> {
 
 /// Standard GPS-style blue dot with white ring.
 class _UserLocationDot extends StatelessWidget {
+  const _UserLocationDot({required this.mapBlue});
+
+  final Color mapBlue;
+
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       width: 22,
       height: 22,
       decoration: BoxDecoration(
-        color: const Color(0xFF1E88E5),
+        color: mapBlue,
         shape: BoxShape.circle,
-        border: Border.all(color: MuzhirColors.white, width: 3),
+        border: Border.all(color: scheme.onPrimary, width: 3),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.25),
+            color: scheme.shadow.withValues(alpha: 0.25),
             blurRadius: 4,
             offset: const Offset(0, 1),
           ),
@@ -344,16 +440,4 @@ class _UserLocationDot extends StatelessWidget {
       ),
     );
   }
-}
-
-class _MapMarkerData {
-  const _MapMarkerData({
-    required this.point,
-    required this.color,
-    required this.onTap,
-  });
-
-  final LatLng point;
-  final Color color;
-  final VoidCallback onTap;
 }

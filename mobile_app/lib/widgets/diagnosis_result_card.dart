@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:muzhir/config/app_theme.dart';
+import 'package:muzhir/theme/app_theme.dart';
 import 'package:muzhir/widgets/recent_scan_tile.dart';
 
 /// Text-only diagnosis result card.
@@ -29,7 +29,7 @@ class DiagnosisResultCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color statusColor =
-        isHealthy ? MuzhirColors.coreLeafGreen : const Color(0xFFD4790E);
+        isHealthy ? MuzhirColors.coreLeafGreen : MuzhirColors.infectionSeriousOrange;
     final bool isMobile = source == ScanSource.mobile;
 
     return Container(

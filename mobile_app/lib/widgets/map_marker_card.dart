@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:muzhir/config/app_theme.dart';
+import 'package:muzhir/theme/app_theme.dart';
 
 /// Bottom sheet content displayed when a map marker is tapped.
 class MapMarkerCard extends StatelessWidget {
@@ -21,7 +21,7 @@ class MapMarkerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color statusColor =
-        isHealthy ? MuzhirColors.coreLeafGreen : const Color(0xFFD4790E);
+        isHealthy ? MuzhirColors.darkOliveGreen : MuzhirColors.earthyClayRed;
 
     return Container(
       width: double.infinity,
@@ -63,7 +63,7 @@ class MapMarkerCard extends StatelessWidget {
                 locationName,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w700,
-                      color: MuzhirColors.midnightTechGreen,
+                      color: MuzhirColors.titleCharcoal,
                     ),
               ),
             ],

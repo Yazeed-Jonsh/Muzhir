@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:muzhir/config/app_theme.dart';
+import 'package:muzhir/theme/app_theme.dart';
 
 /// Tappable card for selecting an image capture method.
 /// Used in the Diagnose page idle state for Camera, Gallery, and Drone options.

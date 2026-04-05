@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:muzhir/config/app_theme.dart';
+import 'package:muzhir/theme/app_theme.dart';
 
 /// Capture source for a scan entry.
 enum ScanSource { mobile, drone }
@@ -34,7 +34,7 @@ class RecentScanTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool healthy = scan.isHealthy;
     final Color statusColor =
-        healthy ? MuzhirColors.coreLeafGreen : const Color(0xFFD4790E);
+        healthy ? MuzhirColors.coreLeafGreen : MuzhirColors.infectionSeriousOrange;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),

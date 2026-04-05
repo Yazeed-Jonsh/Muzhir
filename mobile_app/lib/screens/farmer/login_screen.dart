@@ -39,14 +39,14 @@ class _LoginScreenState extends State<LoginScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Signed in successfully')),
         );
-        // Navigate away, e.g. Navigator.of(context).pushReplacementNamed('/home');
       }
     } catch (e) {
       if (!mounted) return;
+      final scheme = Theme.of(context).colorScheme;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(e.toString().replaceFirst('Exception: ', '')),
-          backgroundColor: Colors.red.shade700,
+          backgroundColor: scheme.error,
         ),
       );
     } finally {
@@ -56,9 +56,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const greenPrimary = Color(0xFF2E7D32);
-    const greenLight = Color(0xFFE8F5E9);
-    const greenDark = Color(0xFF1B5E20);
+    final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       body: Container(
@@ -68,7 +66,10 @@ class _LoginScreenState extends State<LoginScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [greenLight, greenLight.withOpacity(0.95)],
+            colors: [
+              scheme.primaryContainer.withValues(alpha: 0.45),
+              scheme.surface,
+            ],
           ),
         ),
         child: SafeArea(
@@ -98,7 +99,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           style: TextStyle(
                             fontSize: 26,
                             fontWeight: FontWeight.bold,
-                            color: greenDark,
+                            color: scheme.onPrimaryContainer,
                           ),
                         ),
                         const SizedBox(height: 6),
@@ -106,7 +107,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           'Log in to your account',
                           style: TextStyle(
                             fontSize: 14,
-                            color: Colors.grey.shade700,
+                            color: scheme.onSurfaceVariant,
                           ),
                         ),
                         const SizedBox(height: 28),
@@ -116,13 +117,13 @@ class _LoginScreenState extends State<LoginScreen> {
                           decoration: InputDecoration(
                             labelText: 'Email Address',
                             hintText: 'your@email.com',
-                            prefixIcon: Icon(Icons.email_outlined, color: greenPrimary),
+                            prefixIcon: Icon(Icons.email_outlined, color: scheme.primary),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(color: greenPrimary, width: 2),
+                              borderSide: BorderSide(color: scheme.primary, width: 2),
                             ),
                           ),
                           validator: (v) {
@@ -137,11 +138,11 @@ class _LoginScreenState extends State<LoginScreen> {
                           obscureText: _obscurePassword,
                           decoration: InputDecoration(
                             labelText: 'Password',
-                            prefixIcon: Icon(Icons.lock_outline, color: greenPrimary),
+                            prefixIcon: Icon(Icons.lock_outline, color: scheme.primary),
                             suffixIcon: IconButton(
                               icon: Icon(
                                 _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                                color: greenPrimary,
+                                color: scheme.primary,
                               ),
                               onPressed: () =>
                                   setState(() => _obscurePassword = !_obscurePassword),
@@ -151,7 +152,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(color: greenPrimary, width: 2),
+                              borderSide: BorderSide(color: scheme.primary, width: 2),
                             ),
                           ),
                           validator: (v) {
@@ -183,12 +184,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                 );
                               } catch (e) {
                                 if (!context.mounted) return;
+                                final s = Theme.of(context).colorScheme;
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(
                                       e.toString().replaceFirst('Exception: ', ''),
                                     ),
-                                    backgroundColor: Colors.red.shade700,
+                                    backgroundColor: s.error,
                                   ),
                                 );
                               }
@@ -202,7 +204,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               'Forgot Password?',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: greenDark.withOpacity(0.9),
+                                color: scheme.onPrimaryContainer.withValues(alpha: 0.9),
                               ),
                             ),
                           ),
@@ -214,19 +216,19 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: ElevatedButton(
                             onPressed: _isLoading ? null : _onLogin,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: greenPrimary,
-                              foregroundColor: Colors.white,
+                              backgroundColor: scheme.primary,
+                              foregroundColor: scheme.onPrimary,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
                             ),
                             child: _isLoading
-                                ? const SizedBox(
+                                ? SizedBox(
                                     height: 24,
                                     width: 24,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                      valueColor: AlwaysStoppedAnimation<Color>(scheme.onPrimary),
                                     ),
                                   )
                                 : const Text('Login'),
@@ -244,13 +246,13 @@ class _LoginScreenState extends State<LoginScreen> {
                           },
                           child: RichText(
                             text: TextSpan(
-                              style: TextStyle(color: Colors.grey.shade700, fontSize: 14),
+                              style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 14),
                               children: [
                                 const TextSpan(text: "Don't have an account? "),
                                 TextSpan(
                                   text: 'Sign Up',
                                   style: TextStyle(
-                                    color: greenPrimary,
+                                    color: scheme.primary,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:muzhir/config/app_theme.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:muzhir/theme/app_theme.dart';
 
 /// Reusable stat card displaying an icon, numeric value, and label.
 class StatCard extends StatelessWidget {
@@ -56,9 +57,12 @@ class StatCard extends StatelessWidget {
             const SizedBox(height: 2),
             Text(
               label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: MuzhirColors.deepCharcoal.withValues(alpha: 0.55),
-                  ),
+              style: GoogleFonts.lexend(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: MuzhirColors.titleCharcoal,
+                height: 1.2,
+              ),
               textAlign: TextAlign.center,
             ),
           ],

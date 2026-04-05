@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:muzhir/config/app_theme.dart';
+import 'package:muzhir/theme/app_theme.dart';
 
 /// Greeting banner at the top of the Farmer Dashboard.
 /// Shows a welcome message and the current date.
@@ -13,6 +13,7 @@ class GreetingHeader extends StatelessWidget {
     return 'Good evening';
   }
 
+  /// Formats today using the device clock ([DateTime.now] in local time).
   String _formattedDate() {
     final now = DateTime.now();
     const months = [
@@ -30,7 +31,7 @@ class GreetingHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
@@ -46,6 +47,7 @@ class GreetingHeader extends StatelessWidget {
         ),
       ),
       child: SafeArea(
+        top: false,
         bottom: false,
         child: Row(
           children: [

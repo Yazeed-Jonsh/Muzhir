@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:muzhir/config/app_theme.dart';
+import 'package:muzhir/theme/app_theme.dart';
 
 /// Displays a preview of the selected image, or a dashed empty-state placeholder.
 class ImagePreviewBox extends StatelessWidget {

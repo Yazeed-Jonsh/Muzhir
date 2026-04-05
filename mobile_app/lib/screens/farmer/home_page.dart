@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:muzhir/config/app_theme.dart';
+import 'package:muzhir/theme/app_theme.dart';
 import 'package:muzhir/widgets/greeting_header.dart';
 import 'package:muzhir/widgets/stat_card.dart';
 import 'package:muzhir/widgets/weather_card.dart';
@@ -45,91 +45,79 @@ class FarmerHomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Greeting Header ──────────────────────────────────────────
-          const GreetingHeader(),
-          const SizedBox(height: 20),
-
-          // ── Quick Stats Row ──────────────────────────────────────────
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                StatCard(
-                  icon: Icons.document_scanner_rounded,
-                  value: '12',
-                  label: 'Total Scans',
-                  iconColor: MuzhirColors.coreLeafGreen,
-                ),
-                SizedBox(width: 12),
-                StatCard(
-                  icon: Icons.check_circle_outline_rounded,
-                  value: '9',
-                  label: 'Healthy',
-                  iconColor: MuzhirColors.vividSprout,
-                ),
-                SizedBox(width: 12),
-                StatCard(
-                  icon: Icons.warning_amber_rounded,
-                  value: '3',
-                  label: 'Diseased',
-                  iconColor: Color(0xFFD4790E),
-                ),
-              ],
-            ),
+    return ListView(
+      padding: EdgeInsets.zero,
+      shrinkWrap: false,
+      physics: const ClampingScrollPhysics(),
+      children: [
+        const GreetingHeader(),
+        const SizedBox(height: 20),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              StatCard(
+                icon: Icons.center_focus_strong,
+                value: '12',
+                label: 'Total Scans',
+                iconColor: MuzhirColors.coreLeafGreen,
+              ),
+              SizedBox(width: 12),
+              StatCard(
+                icon: Icons.eco_rounded,
+                value: '9',
+                label: 'Healthy',
+                iconColor: MuzhirColors.coreLeafGreen,
+                iconBackgroundColor: MuzhirColors.statHealthyIconWell,
+              ),
+              SizedBox(width: 12),
+              StatCard(
+                icon: Icons.coronavirus_outlined,
+                value: '3',
+                label: 'Diseased',
+                iconColor: MuzhirColors.infectionSeriousOrange,
+              ),
+            ],
           ),
-          const SizedBox(height: 20),
-
-          // ── Weather Card ─────────────────────────────────────────────
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16),
-            child: WeatherCard(),
+        ),
+        const SizedBox(height: 20),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: WeatherCard(),
+        ),
+        const SizedBox(height: 24),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Recent Scans',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              TextButton(
+                onPressed: () {
+                  // TODO: Navigate to full history (Item 5)
+                },
+                child: Text(
+                  'View All',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: MuzhirColors.titleCharcoal,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 24),
-
-          // ── Recent Scans Section ─────────────────────────────────────
+        ),
+        const SizedBox(height: 4),
+        for (final scan in _mockScans)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Recent Scans',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                TextButton(
-                  onPressed: () {
-                    // TODO: Navigate to full history (Item 5)
-                  },
-                  child: Text(
-                    'View All',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: MuzhirColors.coreLeafGreen,
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                ),
-              ],
-            ),
+            child: RecentScanTile(scan: scan),
           ),
-          const SizedBox(height: 4),
-
-          // ── Scan List ────────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
-              children: _mockScans
-                  .map((scan) => RecentScanTile(scan: scan))
-                  .toList(),
-            ),
-          ),
-          const SizedBox(height: 24),
-        ],
-      ),
+        const SizedBox(height: 100),
+      ],
     );
   }
 }

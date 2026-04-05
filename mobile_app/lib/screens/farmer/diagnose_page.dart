@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:muzhir/config/app_theme.dart';
 import 'package:muzhir/widgets/capture_option_card.dart';
 import 'package:muzhir/widgets/image_preview_box.dart';
 import 'package:muzhir/widgets/crop_type_dropdown.dart';
@@ -178,7 +177,7 @@ class _DiagnosePageState extends State<DiagnosePage> {
           Text(
             'Scan your plant for diseases using AI',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: MuzhirColors.deepCharcoal.withValues(alpha: 0.55),
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.55),
                 ),
           ),
           const SizedBox(height: 20),
@@ -235,7 +234,7 @@ class _DiagnosePageState extends State<DiagnosePage> {
               icon: Icons.flight_rounded,
               title: 'Drone',
               subtitle: 'Import scan',
-              iconColor: MuzhirColors.midnightTechGreen,
+              iconColor: Theme.of(context).colorScheme.onPrimaryContainer,
               onTap: _pickImageForDrone,
             ),
           ],
@@ -258,13 +257,13 @@ class _DiagnosePageState extends State<DiagnosePage> {
             Icon(
               isMobile ? Icons.smartphone_rounded : Icons.flight_rounded,
               size: 16,
-              color: MuzhirColors.vividSprout,
+              color: Theme.of(context).colorScheme.secondary,
             ),
             const SizedBox(width: 6),
             Text(
               'Selected via: ${isMobile ? 'Mobile' : 'Drone'}',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: MuzhirColors.deepCharcoal.withValues(alpha: 0.55),
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.55),
                   ),
             ),
           ],
@@ -285,13 +284,14 @@ class _DiagnosePageState extends State<DiagnosePage> {
           child: ElevatedButton.icon(
             onPressed: _isAnalyzing ? null : _onAnalyze,
             icon: _isAnalyzing
-                ? const SizedBox(
+                ? SizedBox(
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2.5,
-                      valueColor:
-                          AlwaysStoppedAnimation<Color>(MuzhirColors.white),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        Theme.of(context).colorScheme.onPrimary,
+                      ),
                     ),
                   )
                 : const Icon(Icons.eco_rounded),
@@ -340,7 +340,7 @@ class _DiagnosePageState extends State<DiagnosePage> {
             label: Text(
               'Scan Another',
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: MuzhirColors.coreLeafGreen,
+                    color: Theme.of(context).colorScheme.primary,
                     fontWeight: FontWeight.w600,
                   ),
             ),

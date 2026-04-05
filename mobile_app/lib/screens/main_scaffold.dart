@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:muzhir/config/app_theme.dart';
 import 'package:muzhir/services/auth_service.dart';
 import 'package:muzhir/screens/farmer/home_page.dart';
 import 'package:muzhir/screens/farmer/diagnose_page.dart';
@@ -7,7 +6,7 @@ import 'package:muzhir/screens/farmer/map_page.dart';
 import 'package:muzhir/screens/farmer/history_page.dart';
 
 /// Root scaffold for the Farmer view.
-/// Provides the BottomNavigationBar with four tabs:
+/// Floating Material 3 [NavigationBar] (rounded, inset from screen edges).
 ///   0 – Home  |  1 – Diagnose  |  2 – Map  |  3 – History
 class MainScaffold extends StatefulWidget {
   const MainScaffold({super.key});
@@ -17,6 +16,8 @@ class MainScaffold extends StatefulWidget {
 }
 
 class _MainScaffoldState extends State<MainScaffold> {
+  static const double _floatingNavRadius = 30;
+
   int _currentIndex = 0;
 
   static const List<String> _titles = [
@@ -35,14 +36,21 @@ class _MainScaffoldState extends State<MainScaffold> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBody: false,
+      extendBodyBehindAppBar: false,
       appBar: AppBar(
         title: Text(_titles[_currentIndex]),
-        leading: const Padding(
-          padding: EdgeInsets.all(8.0),
-          child: Icon(
-            Icons.eco_rounded,
-            color: MuzhirColors.luminousLime,
-            size: 28,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 16),
+          child: Center(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: Image.asset(
+                'assets/logos/muzhir_logo.jpeg',
+                height: 32,
+                fit: BoxFit.contain,
+              ),
+            ),
           ),
         ),
         actions: [
@@ -75,31 +83,51 @@ class _MainScaffoldState extends State<MainScaffold> {
           const HistoryPage(),
         ],
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: _onTabTapped,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home_rounded),
-            activeIcon: Icon(Icons.home),
-            label: 'Home',
+      bottomNavigationBar: Container(
+        margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardTheme.color ??
+              Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(_floatingNavRadius),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 15,
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(_floatingNavRadius),
+          child: NavigationBar(
+            elevation: 0,
+            backgroundColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            selectedIndex: _currentIndex,
+            onDestinationSelected: _onTabTapped,
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.home_outlined),
+                selectedIcon: Icon(Icons.home_rounded),
+                label: 'Home',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.document_scanner_outlined),
+                selectedIcon: Icon(Icons.document_scanner_rounded),
+                label: 'Diagnose',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.map_outlined),
+                selectedIcon: Icon(Icons.map_rounded),
+                label: 'Map',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.history_outlined),
+                selectedIcon: Icon(Icons.history_rounded),
+                label: 'History',
+              ),
+            ],
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.document_scanner_outlined),
-            activeIcon: Icon(Icons.document_scanner_rounded),
-            label: 'Diagnose',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.map_outlined),
-            activeIcon: Icon(Icons.map_rounded),
-            label: 'Map',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.history_outlined),
-            activeIcon: Icon(Icons.history_rounded),
-            label: 'History',
-          ),
-        ],
+        ),
       ),
     );
   }
