@@ -78,7 +78,9 @@ class _MainScaffoldState extends State<MainScaffold> {
         index: _currentIndex,
         children: [
           const FarmerHomePage(),
-          const DiagnosePage(),
+          DiagnosePage(
+            onViewAllRecent: () => setState(() => _currentIndex = 3),
+          ),
           MapPage(isTabVisible: _currentIndex == 2),
           const HistoryPage(),
         ],
@@ -106,18 +108,18 @@ class _MainScaffoldState extends State<MainScaffold> {
             onDestinationSelected: _onTabTapped,
             destinations: const [
               NavigationDestination(
-                icon: Icon(Icons.home_outlined),
-                selectedIcon: Icon(Icons.home_rounded),
+                icon: Icon(Icons.park_outlined),
+                selectedIcon: Icon(Icons.park_rounded),
                 label: 'Home',
               ),
               NavigationDestination(
-                icon: Icon(Icons.document_scanner_outlined),
-                selectedIcon: Icon(Icons.document_scanner_rounded),
+                icon: Icon(Icons.biotech_outlined),
+                selectedIcon: Icon(Icons.biotech_rounded),
                 label: 'Diagnose',
               ),
               NavigationDestination(
-                icon: Icon(Icons.map_outlined),
-                selectedIcon: Icon(Icons.map_rounded),
+                icon: Icon(Icons.explore_outlined),
+                selectedIcon: Icon(Icons.explore_rounded),
                 label: 'Map',
               ),
               NavigationDestination(

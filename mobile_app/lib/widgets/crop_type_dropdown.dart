@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:muzhir/theme/app_theme.dart';
 
 /// Dropdown for selecting crop type before analysis.
@@ -22,9 +23,11 @@ class CropTypeDropdown extends StatelessWidget {
       children: [
         Text(
           'Crop Type',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+          style: GoogleFonts.lexend(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: MuzhirColors.titleCharcoal,
+          ),
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(

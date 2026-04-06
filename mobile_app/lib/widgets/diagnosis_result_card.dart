@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:muzhir/theme/app_theme.dart';
 import 'package:muzhir/widgets/recent_scan_tile.dart';
 
@@ -60,9 +61,11 @@ class DiagnosisResultCard extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 'Diagnosis Result',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                style: GoogleFonts.lexend(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: MuzhirColors.titleCharcoal,
+                ),
               ),
             ],
           ),
