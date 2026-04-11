@@ -41,7 +41,20 @@ Thumbs.db
 credentials.json
 *.key
 
-# Firebase config (keep local, not in git)
-mobile_app/android/app/google-services.json
-mobile_app/firebase.json
+# Python virtual environments (repo root, Cloud Functions, backend)
+venv/
+.venv/
+**/venv/
+**/.venv/
+
+# Firebase / GCP — never commit private keys or local client configs
+**/serviceAccountKey.json
+**/*serviceAccount*.json
+**/google-services.json
+**/GoogleService-Info.plist
+
+# FlutterFire-generated options (regenerate per machine / CI secret if needed)
 mobile_app/lib/firebase_options.dart
+
+# Project-local Firebase CLI file under app dir only (root firebase.json is tracked)
+mobile_app/firebase.json
