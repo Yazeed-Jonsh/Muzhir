@@ -12,6 +12,12 @@
 @import cloud_firestore;
 #endif
 
+#if __has_include(<connectivity_plus/ConnectivityPlusPlugin.h>)
+#import <connectivity_plus/ConnectivityPlusPlugin.h>
+#else
+@import connectivity_plus;
+#endif
+
 #if __has_include(<firebase_auth/FLTFirebaseAuthPlugin.h>)
 #import <firebase_auth/FLTFirebaseAuthPlugin.h>
 #else
@@ -22,6 +28,12 @@
 #import <firebase_core/FLTFirebaseCorePlugin.h>
 #else
 @import firebase_core;
+#endif
+
+#if __has_include(<firebase_storage/FLTFirebaseStoragePlugin.h>)
+#import <firebase_storage/FLTFirebaseStoragePlugin.h>
+#else
+@import firebase_storage;
 #endif
 
 #if __has_include(<geolocator_apple/GeolocatorPlugin.h>)
@@ -42,15 +54,24 @@
 @import package_info_plus;
 #endif
 
+#if __has_include(<sqflite_darwin/SqflitePlugin.h>)
+#import <sqflite_darwin/SqflitePlugin.h>
+#else
+@import sqflite_darwin;
+#endif
+
 @implementation GeneratedPluginRegistrant
 
 + (void)registerWithRegistry:(NSObject<FlutterPluginRegistry>*)registry {
   [FLTFirebaseFirestorePlugin registerWithRegistrar:[registry registrarForPlugin:@"FLTFirebaseFirestorePlugin"]];
+  [ConnectivityPlusPlugin registerWithRegistrar:[registry registrarForPlugin:@"ConnectivityPlusPlugin"]];
   [FLTFirebaseAuthPlugin registerWithRegistrar:[registry registrarForPlugin:@"FLTFirebaseAuthPlugin"]];
   [FLTFirebaseCorePlugin registerWithRegistrar:[registry registrarForPlugin:@"FLTFirebaseCorePlugin"]];
+  [FLTFirebaseStoragePlugin registerWithRegistrar:[registry registrarForPlugin:@"FLTFirebaseStoragePlugin"]];
   [GeolocatorPlugin registerWithRegistrar:[registry registrarForPlugin:@"GeolocatorPlugin"]];
   [FLTImagePickerPlugin registerWithRegistrar:[registry registrarForPlugin:@"FLTImagePickerPlugin"]];
   [FPPPackageInfoPlusPlugin registerWithRegistrar:[registry registrarForPlugin:@"FPPPackageInfoPlusPlugin"]];
+  [SqflitePlugin registerWithRegistrar:[registry registrarForPlugin:@"SqflitePlugin"]];
 }
 
 @end

@@ -4,6 +4,7 @@ import 'package:muzhir/screens/farmer/home_page.dart';
 import 'package:muzhir/screens/farmer/diagnose_page.dart';
 import 'package:muzhir/screens/farmer/map_page.dart';
 import 'package:muzhir/screens/farmer/history_page.dart';
+import 'package:muzhir/screens/farmer/profile_screen.dart';
 
 /// Root scaffold for the Farmer view.
 /// Floating Material 3 [NavigationBar] (rounded, inset from screen edges).
@@ -63,7 +64,11 @@ class _MainScaffoldState extends State<MainScaffold> {
           IconButton(
             icon: const Icon(Icons.person_outline_rounded),
             onPressed: () {
-              // TODO: Profile / Settings – future sprint
+              Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder: (context) => const ProfileScreen(),
+                ),
+              );
             },
           ),
           IconButton(

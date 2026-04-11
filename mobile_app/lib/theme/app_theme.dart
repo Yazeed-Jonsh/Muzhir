@@ -26,6 +26,9 @@ class MuzhirColors {
   /// Stronger sage — Healthy stat-card icon circle (visible on white).
   static const Color statHealthyIconWell = Color(0xFFC5D4B8);
 
+  /// Sage — role badge fill for Farmer on profile and similar accents.
+  static const Color sageGreen = Color(0xFF9AAF8C);
+
   /// Soft fill behind the active [NavigationBar] indicator (M3 oval).
   static const Color navIndicatorFill = Color(0xFFE8F0E4);
 
