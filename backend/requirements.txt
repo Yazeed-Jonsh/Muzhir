@@ -6,3 +6,4 @@ opencv-python
 ultralytics
 groq
 python-dotenv
+cloudinary

@@ -4,10 +4,17 @@ Muzhir Backend — FastAPI application entry point (placeholder).
 Mount route modules from `routers/` as endpoints are implemented.
 """
 
+from pathlib import Path
 from uuid import uuid4
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from dotenv import load_dotenv
 
+# Load repo-root `.env` before any module reads os.environ (Cloudinary, Groq, etc.).
+load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=True)
+
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
+
+from backend.core.cloudinary_uploader import delete_image, upload_image, upload_image_asset
 from backend.inference.class_mapper import ClassMapper
 from backend.inference.llm_caller import get_recommendation
 from backend.inference.model_loader import lifespan
@@ -19,6 +26,11 @@ from backend.models.user import UserModel
 from backend.schemas.responses import DiagnosisBlock, DiagnoseResponse, HistoryResponse
 
 app = FastAPI(title="Muzhir Backend", version="0.1.0", lifespan=lifespan)
+
+
+def _validate_image_upload(image: UploadFile) -> None:
+    if image.content_type is None or not image.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Only image uploads are supported.")
 
 
 @app.get("/health")
@@ -130,12 +142,29 @@ def _build_diagnosis_block(
 )
 async def diagnose(image: UploadFile = File(...)) -> DiagnoseResponse:
     """Accept a real image upload and return YOLO diagnosis output."""
-    if image.content_type is None or not image.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Only image uploads are supported.")
+    _validate_image_upload(image)
 
     image_bytes = await image.read()
     if not image_bytes:
         raise HTTPException(status_code=400, detail="Uploaded image is empty.")
+
+    try:
+        image_url = upload_image(
+            image_bytes,
+            folder="muzhir/scans",
+            public_id=f"scan_{uuid4().hex}",
+            filename=image.filename or "scan.jpg",
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Image upload failed: {exc}",
+        ) from exc
 
     model = app.state.yolo_model
     class_mapper = app.state.class_mapper
@@ -187,9 +216,74 @@ async def diagnose(image: UploadFile = File(...)) -> DiagnoseResponse:
     return DiagnoseResponse(
         scan_id=f"scan_{uuid4().hex[:8]}",
         status="done",
-        image_url=f"upload://{image.filename or 'image'}",
+        image_url=image_url,
         diagnosis=diagnosis,
     )
+
+
+@app.post("/api/v1/profile-photo", summary="Upload profile photo to Cloudinary")
+async def upload_profile_photo(
+    user_id: str = Form(..., alias="userId"),
+    image: UploadFile = File(...),
+) -> dict[str, str]:
+    """Upload profile photo and return Cloudinary URL/public id."""
+    _validate_image_upload(image)
+    normalized_user_id = user_id.strip()
+    if not normalized_user_id:
+        raise HTTPException(status_code=400, detail="userId cannot be empty.")
+
+    image_bytes = await image.read()
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded image is empty.")
+
+    try:
+        image_url, public_id = upload_image_asset(
+            image_bytes,
+            folder=f"muzhir/users/{normalized_user_id}",
+            public_id="profile_pic",
+            filename=image.filename or "profile.jpg",
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Profile upload failed: {exc}",
+        ) from exc
+
+    return {"imageUrl": image_url, "publicId": public_id}
+
+
+@app.delete("/api/v1/profile-photo", summary="Delete profile photo from Cloudinary")
+async def delete_profile_photo(
+    user_id: str = Form(..., alias="userId"),
+    image_url: str | None = Form(None, alias="imageUrl"),
+    public_id: str | None = Form(None, alias="publicId"),
+) -> dict[str, bool]:
+    """Delete a profile photo by public id or image URL."""
+    normalized_user_id = user_id.strip()
+    if not normalized_user_id:
+        raise HTTPException(status_code=400, detail="userId cannot be empty.")
+
+    try:
+        deleted = delete_image(public_id=public_id, image_url=image_url)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Profile delete failed: {exc}",
+        ) from exc
+
+    return {"deleted": deleted}
 
 
 @app.post(

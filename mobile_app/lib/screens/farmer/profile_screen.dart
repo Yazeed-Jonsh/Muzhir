@@ -1,12 +1,13 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:muzhir/models/muzhir_user.dart';
 import 'package:muzhir/providers/connectivity_provider.dart';
@@ -595,6 +596,34 @@ class _ProfileLoadedView extends ConsumerStatefulWidget {
 
 class _ProfileLoadedViewState extends ConsumerState<_ProfileLoadedView> {
   bool _uploadingAvatar = false;
+  static const String _backendBaseUrl = String.fromEnvironment(
+    'MUZHIR_BACKEND_URL',
+    defaultValue: 'http://10.0.2.2:8000',
+  );
+
+  Uri _profilePhotoEndpoint() => Uri.parse('$_backendBaseUrl/api/v1/profile-photo');
+
+  Future<Map<String, dynamic>> _sendMultipartRequest(
+    http.MultipartRequest request, {
+    required String failurePrefix,
+  }) async {
+    final streamed = await request.send();
+    final body = await streamed.stream.bytesToString();
+    if (streamed.statusCode < 200 || streamed.statusCode >= 300) {
+      final detail = body.trim().isEmpty ? 'status ${streamed.statusCode}' : body.trim();
+      throw HttpException('$failurePrefix: $detail');
+    }
+
+    if (body.trim().isEmpty) {
+      return <String, dynamic>{};
+    }
+
+    final decoded = jsonDecode(body);
+    if (decoded is Map<String, dynamic>) {
+      return decoded;
+    }
+    throw const FormatException('Backend returned non-object JSON.');
+  }
 
   Widget _buildAvatarFace() {
     final user = widget.user;
@@ -816,19 +845,17 @@ class _ProfileLoadedViewState extends ConsumerState<_ProfileLoadedView> {
 
     setState(() => _uploadingAvatar = true);
     try {
-      final file = File(xFile.path);
-      final storageRef = FirebaseStorage.instance
-          .ref()
-          .child('users')
-          .child(uid)
-          .child('profile_pic.jpg');
-
-      final contentType = xFile.mimeType ?? 'image/jpeg';
-      await storageRef.putFile(
-        file,
-        SettableMetadata(contentType: contentType),
+      final request = http.MultipartRequest('POST', _profilePhotoEndpoint())
+        ..fields['userId'] = uid
+        ..files.add(await http.MultipartFile.fromPath('image', xFile.path));
+      final payload = await _sendMultipartRequest(
+        request,
+        failurePrefix: 'Could not upload profile image',
       );
-      final downloadUrl = await storageRef.getDownloadURL();
+      final downloadUrl = (payload['imageUrl'] ?? '').toString().trim();
+      if (downloadUrl.isEmpty) {
+        throw const FormatException('Backend did not return imageUrl.');
+      }
 
       await FirebaseFirestore.instance.collection('users').doc(uid).update({
         'profilePictureUrl': downloadUrl,
@@ -879,15 +906,15 @@ class _ProfileLoadedViewState extends ConsumerState<_ProfileLoadedView> {
 
     setState(() => _uploadingAvatar = true);
     try {
-      final storageRef = FirebaseStorage.instance
-          .ref()
-          .child('users')
-          .child(uid)
-          .child('profile_pic.jpg');
-      try {
-        await storageRef.delete();
-      } catch (_) {
-        // Object may be missing; still clear Firestore.
+      final existingUrl = _nonEmptyProfilePictureUrl(widget.user.profilePictureUrl);
+      if (existingUrl != null) {
+        final request = http.MultipartRequest('DELETE', _profilePhotoEndpoint())
+          ..fields['userId'] = uid
+          ..fields['imageUrl'] = existingUrl;
+        await _sendMultipartRequest(
+          request,
+          failurePrefix: 'Could not remove profile image',
+        );
       }
 
       await FirebaseFirestore.instance.collection('users').doc(uid).update({

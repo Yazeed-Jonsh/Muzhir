@@ -1,17 +1,30 @@
 # muzhir
 
-A new Flutter project.
+Flutter client for Muzhir.
 
-## Getting Started
+## Backend URL for Profile Image APIs
 
-This project is a starting point for a Flutter application.
+Profile image upload/delete now call backend endpoints:
 
-A few resources to get you started if this is your first Flutter project:
+- `POST /api/v1/profile-photo`
+- `DELETE /api/v1/profile-photo`
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+Set backend URL at build/run time:
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```bash
+flutter run --dart-define=MUZHIR_BACKEND_URL=http://10.0.2.2:8000
+```
+
+If omitted, the app defaults to `http://10.0.2.2:8000`.
+
+## Cloudinary Environment Variables (Backend)
+
+Copy `.env.example` to `.env` in the repository root and fill:
+
+- `CLOUDINARY_CLOUD_NAME`
+- `CLOUDINARY_API_KEY`
+- `CLOUDINARY_API_SECRET`
+
+Optional (recommendation service):
+
+- `GROQ_API_KEY`

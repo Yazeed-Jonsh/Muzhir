@@ -38,6 +38,7 @@ Thumbs.db
 # Environment / Secrets
 .env
 .env.*
+!.env.example
 credentials.json
 *.key
 
@@ -60,3 +61,8 @@ mobile_app/lib/firebase_options.dart
 mobile_app/firebase.json
 
 backend/assets/best.pt
+
+# Python bytecode (never commit)
+**/__pycache__/
+*.py[cod]
+*.pyc
