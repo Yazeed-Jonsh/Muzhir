@@ -58,3 +58,5 @@ mobile_app/lib/firebase_options.dart
 
 # Project-local Firebase CLI file under app dir only (root firebase.json is tracked)
 mobile_app/firebase.json
+
+backend/assets/best.pt

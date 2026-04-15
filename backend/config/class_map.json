@@ -1,0 +1,10 @@
+{
+  "0": { "en": "Healthy", "ar": "سليم" },
+  "1": { "en": "Bacterial Wilt", "ar": "الذبول البكتيري" },
+  "2": { "en": "Early Blight", "ar": "لفحة مبكرة" },
+  "3": { "en": "Powdery Mildew", "ar": "البياض الدقيقي" },
+  "4": { "en": "Downy Mildew", "ar": "البياض الزغبي" },
+  "5": { "en": "Leaf Spot", "ar": "تبقع الأوراق" },
+  "6": { "en": "Rust", "ar": "صدأ" },
+  "7": { "en": "Tomato_Mildiou", "ar": "ميلديو الطماطم" }
+}
