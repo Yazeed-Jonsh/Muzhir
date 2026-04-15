@@ -159,6 +159,27 @@ class DiagnoseResponse(BaseModel):
     )
 
 
+class DiagnoseUploadResponse(BaseModel):
+    """Cloud-storage upload result for a diagnosis scan."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    scan_id: str = Field(
+        alias="scanId",
+        description="Unique scan identifier used for storage and tracking.",
+        examples=["scan_f47ac10b58cc4372a5670e02b2c3d479"],
+    )
+    image_url: str = Field(
+        alias="imageUrl",
+        description="Public Firebase Storage URL for the uploaded scan image.",
+        examples=["https://storage.googleapis.com/example-bucket/scans/scan_123/image.jpg"],
+    )
+    status: Literal["success"] = Field(
+        description="Upload and processing status.",
+        examples=["success"],
+    )
+
+
 class HistoryResponse(BaseModel):
     """Paginated-style wrapper for scan history (lightweight entries only)."""
 

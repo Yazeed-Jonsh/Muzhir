@@ -7,6 +7,7 @@ Mount route modules from `routers/` as endpoints are implemented.
 from pathlib import Path
 from uuid import uuid4
 
+<<<<<<< HEAD
 from dotenv import load_dotenv
 
 # Load repo-root `.env` before any module reads os.environ (Cloudinary, Groq, etc.).
@@ -16,6 +17,11 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
 
 from backend.core.cloudinary_uploader import delete_image, upload_image, upload_image_asset
 from backend.inference.class_mapper import ClassMapper
+=======
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+
+from backend.core.firebase_config import upload_scan_image
+>>>>>>> ffcbfd3 (new)
 from backend.inference.llm_caller import get_recommendation
 from backend.inference.model_loader import lifespan
 from backend.inference.runner import InferenceResult, run_inference
@@ -23,7 +29,12 @@ from backend.models.recommendation import RecommendationModel
 from backend.models.diagnosis import BoundingBoxModel, DiseaseSeverity, DiseaseSnapshotModel
 from backend.models.scan import ScanModel
 from backend.models.user import UserModel
-from backend.schemas.responses import DiagnosisBlock, DiagnoseResponse, HistoryResponse
+from backend.schemas.responses import (
+    DiagnosisBlock,
+    DiagnoseResponse,
+    DiagnoseUploadResponse,
+    HistoryResponse,
+)
 
 app = FastAPI(title="Muzhir Backend", version="0.1.0", lifespan=lifespan)
 
@@ -137,17 +148,35 @@ def _build_diagnosis_block(
 
 @app.post(
     "/api/v1/diagnose",
-    response_model=DiagnoseResponse,
-    summary="Run YOLO diagnosis on uploaded image",
+    response_model=DiagnoseUploadResponse,
+    summary="Upload scan image and trigger diagnosis pipeline",
 )
+<<<<<<< HEAD
 async def diagnose(image: UploadFile = File(...)) -> DiagnoseResponse:
     """Accept a real image upload and return YOLO diagnosis output."""
     _validate_image_upload(image)
+=======
+async def diagnose(
+    image: UploadFile = File(...),
+    userId: str = Form(...),
+    cropId: str = Form(...),
+    growthStageId: str = Form(...),
+) -> DiagnoseUploadResponse:
+    """Accept a multipart scan request, upload image, then run inference."""
+    if image.content_type is None or not image.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Only image uploads are supported.")
+    if not userId.strip() or not cropId.strip() or not growthStageId.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="userId, cropId, and growthStageId are required form fields.",
+        )
+>>>>>>> ffcbfd3 (new)
 
     image_bytes = await image.read()
     if not image_bytes:
         raise HTTPException(status_code=400, detail="Uploaded image is empty.")
 
+<<<<<<< HEAD
     try:
         image_url = upload_image(
             image_bytes,
@@ -165,6 +194,14 @@ async def diagnose(image: UploadFile = File(...)) -> DiagnoseResponse:
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Image upload failed: {exc}",
         ) from exc
+=======
+    scan_id = uuid4().hex
+
+    try:
+        image_url = upload_scan_image(scan_id=scan_id, image_bytes=image_bytes)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to upload image: {exc}") from exc
+>>>>>>> ffcbfd3 (new)
 
     model = app.state.yolo_model
     class_mapper = app.state.class_mapper
@@ -175,7 +212,7 @@ async def diagnose(image: UploadFile = File(...)) -> DiagnoseResponse:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if inference_result is None:
-        diagnosis = _no_disease_diagnosis()
+        _no_disease_diagnosis()
     else:
         try:
             print(f"DEBUG: YOLO detected Class ID: {inference_result.class_id}")
@@ -201,11 +238,11 @@ async def diagnose(image: UploadFile = File(...)) -> DiagnoseResponse:
             context = {
                 "disease_name": disease_name_en,
                 "severity": severity_label,
-                "crop_type": "Unknown",
-                "growth_stage": "Unknown",
+                "crop_type": cropId,
+                "growth_stage": growthStageId,
             }
             recommendation = await get_recommendation(context)
-            diagnosis = _build_diagnosis_block(
+            _build_diagnosis_block(
                 inference_result,
                 disease_snapshot,
                 recommendation=recommendation,
@@ -213,11 +250,18 @@ async def diagnose(image: UploadFile = File(...)) -> DiagnoseResponse:
         except KeyError as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+<<<<<<< HEAD
     return DiagnoseResponse(
         scan_id=f"scan_{uuid4().hex[:8]}",
         status="done",
         image_url=image_url,
         diagnosis=diagnosis,
+=======
+    return DiagnoseUploadResponse(
+        scan_id=scan_id,
+        image_url=image_url,
+        status="success",
+>>>>>>> ffcbfd3 (new)
     )
 
 
