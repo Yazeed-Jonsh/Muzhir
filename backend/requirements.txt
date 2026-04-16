@@ -6,8 +6,6 @@ opencv-python
 ultralytics
 groq
 python-dotenv
-<<<<<<< HEAD
+python-multipart
 cloudinary
-=======
 firebase-admin
->>>>>>> ffcbfd3 (new)

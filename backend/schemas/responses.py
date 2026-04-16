@@ -45,6 +45,11 @@ class ScanSummary(BaseModel):
         description="Disease severity when a diagnosis exists; null if pending.",
         examples=["medium"],
     )
+    image_url: str = Field(
+        alias="imageUrl",
+        description="Cloudinary image URL for the scan thumbnail/preview.",
+        examples=["https://res.cloudinary.com/demo/image/upload/v1/muzhir/scans/scan_123.jpg"],
+    )
 
 
 class RecommendationBlock(BaseModel):
@@ -160,7 +165,7 @@ class DiagnoseResponse(BaseModel):
 
 
 class DiagnoseUploadResponse(BaseModel):
-    """Cloud-storage upload result for a diagnosis scan."""
+    """Diagnosis-first response for upload flow."""
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -171,12 +176,55 @@ class DiagnoseUploadResponse(BaseModel):
     )
     image_url: str = Field(
         alias="imageUrl",
-        description="Public Firebase Storage URL for the uploaded scan image.",
-        examples=["https://storage.googleapis.com/example-bucket/scans/scan_123/image.jpg"],
+        description="Cloudinary URL of the uploaded scan image.",
+        examples=["https://res.cloudinary.com/demo/image/upload/v1/muzhir/scans/scan_123.jpg"],
     )
-    status: Literal["success"] = Field(
-        description="Upload and processing status.",
-        examples=["success"],
+    location: str | None = Field(
+        default=None,
+        description="Capture location metadata provided by the client.",
+        examples=["Field A - North Zone"],
+    )
+    source: str = Field(
+        description="Source channel for this scan event.",
+        examples=["mobile"],
+    )
+    diagnosis: "DiagnosePriorityBlock" = Field(
+        description="Minimal diagnosis block focused on model signal.",
+    )
+    recommendation: "DiagnoseRecommendationBlock" = Field(
+        description="Recommendation text prepared for UI button display.",
+    )
+
+
+class DiagnosePriorityBlock(BaseModel):
+    """Diagnosis-first compact payload for immediate UX."""
+
+    label: str = Field(
+        description="Detected disease label (or healthy label).",
+        examples=["Early blight"],
+    )
+    confidence: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="YOLO confidence score (0-1).",
+        examples=[0.87],
+    )
+    is_healthy: bool = Field(
+        description="True when no disease is detected.",
+        examples=[False],
+    )
+
+
+class DiagnoseRecommendationBlock(BaseModel):
+    """Recommendation payload that the UI can reveal on demand."""
+
+    text_ar: str = Field(
+        description="Recommendation text in Arabic.",
+        examples=["رش مبيد فطري وقلم الأوراق المصابة."],
+    )
+    text_en: str = Field(
+        description="Recommendation text in English.",
+        examples=["Apply fungicide and prune affected leaves."],
     )
 
 
