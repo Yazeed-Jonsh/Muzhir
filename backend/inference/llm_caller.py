@@ -4,40 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 from pathlib import Path
 
-from dotenv import load_dotenv
 from groq import Groq
 
+from backend.core.config import settings
 from backend.models.recommendation import RecommendationModel
-
-ROOT_ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
-load_dotenv(dotenv_path=ROOT_ENV_PATH, override=True)
-
-_startup_key = os.getenv("GROQ_API_KEY")
-if not _startup_key:
-    module_dir = Path(__file__).resolve().parent
-    fallback_paths = [
-        module_dir / ".env",
-        module_dir.parent / ".env",
-        Path.cwd() / ".env",
-        Path.cwd().parent / ".env",
-    ]
-    for env_path in fallback_paths:
-        if env_path.exists():
-            load_dotenv(dotenv_path=env_path, override=True)
-            _startup_key = os.getenv("GROQ_API_KEY")
-            if _startup_key:
-                break
-
-if _startup_key:
-    _startup_key = _startup_key.strip().strip('"').strip("'")
-    os.environ["GROQ_API_KEY"] = _startup_key
-    print(f"Using Groq API Key starting with: {_startup_key[:5]}")
-else:
-    print("Using Groq API Key starting with: <missing>")
-    print("CRITICAL: GROQ_API_KEY NOT LOADED FROM ENV")
 
 PROMPT_PATH = Path(__file__).resolve().parents[1] / "prompts" / "treatment_prompt.txt"
 MODEL_NAME = "llama-3.1-8b-instant"
@@ -66,7 +38,7 @@ def _extract_json(text: str) -> dict:
 
 
 def _call_groq(prompt: str, disease_name: str) -> str:
-    api_key = os.getenv("GROQ_API_KEY")
+    api_key = settings.GROQ_API_KEY.strip()
     if not api_key:
         raise RuntimeError("GROQ_API_KEY is missing.")
 

@@ -6,9 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from backend.core.config import settings
 from backend.inference.preprocessor import preprocess
-
-MIN_CONFIDENCE_THRESHOLD = 0.40
 
 
 @dataclass
@@ -41,7 +40,7 @@ def run_inference(image_bytes: bytes, model) -> Optional[InferenceResult]:
 
     top_idx = int(boxes.conf.argmax().item())
     confidence = float(boxes.conf[top_idx].item())
-    if confidence < MIN_CONFIDENCE_THRESHOLD:
+    if confidence < settings.MIN_CONFIDENCE_THRESHOLD:
         return None
 
     class_id = int(boxes.cls[top_idx].item())

@@ -3,31 +3,37 @@
 from __future__ import annotations
 
 import io
-import os
 from typing import Optional
 from urllib.parse import unquote, urlparse
 
 import cloudinary
 import cloudinary.uploader
 
+from backend.core.config import settings
+
 _CONFIGURED = False
 
 
+def _resolve_cloudinary_credentials() -> tuple[str, str, str]:
+    parsed = urlparse(settings.CLOUDINARY_URL.strip())
+    cloud_name = parsed.hostname or ""
+    api_key = unquote(parsed.username or "").strip()
+    api_secret = unquote(parsed.password or "").strip()
+    return cloud_name, api_key, api_secret
+
+
 def _ensure_configured() -> None:
-    """Configure Cloudinary client from env vars once."""
+    """Configure Cloudinary client from settings once."""
     global _CONFIGURED
     if _CONFIGURED:
         return
 
-    cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME", "").strip()
-    api_key = os.getenv("CLOUDINARY_API_KEY", "").strip()
-    api_secret = os.getenv("CLOUDINARY_API_SECRET", "").strip()
+    if not settings.CLOUDINARY_URL.strip():
+        raise RuntimeError("Missing Cloudinary configuration. Set CLOUDINARY_URL.")
 
+    cloud_name, api_key, api_secret = _resolve_cloudinary_credentials()
     if not cloud_name or not api_key or not api_secret:
-        raise RuntimeError(
-            "Missing Cloudinary configuration. Set CLOUDINARY_CLOUD_NAME, "
-            "CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET."
-        )
+        raise RuntimeError("Invalid CLOUDINARY_URL. Expected cloud_name, api_key, and api_secret.")
 
     cloudinary.config(
         cloud_name=cloud_name,
@@ -35,6 +41,7 @@ def _ensure_configured() -> None:
         api_secret=api_secret,
         secure=True,
     )
+    print("DEBUG: Cloudinary configured with explicit credentials parsed from CLOUDINARY_URL.")
     _CONFIGURED = True
 
 

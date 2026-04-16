@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any
 
 import firebase_admin
 from firebase_admin import credentials, firestore
+
+from backend.core.config import settings
 
 DEFAULT_SERVICE_ACCOUNT_PATH = (
     Path(__file__).resolve().parents[1] / "config" / "serviceAccountKey.json"
@@ -15,10 +16,7 @@ DEFAULT_SERVICE_ACCOUNT_PATH = (
 
 
 def _resolve_service_account_path() -> Path:
-    configured_path = (
-        os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH", "").strip()
-        or os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
-    )
+    configured_path = settings.FIREBASE_CREDENTIALS_PATH.strip()
     if configured_path:
         return Path(configured_path).expanduser()
     return DEFAULT_SERVICE_ACCOUNT_PATH
@@ -60,18 +58,6 @@ def soft_delete_scan(scan_id: str) -> None:
     )
 
 
-def log_activity(*, scan_id: str, user_id: str, action_type: str) -> None:
-    """Append an activity row to `/activity_logs`."""
-    get_firestore_client().collection("activity_logs").add(
-        {
-            "scanId": scan_id,
-            "userId": user_id,
-            "actionType": action_type,
-            "timestamp": firestore.SERVER_TIMESTAMP,
-        }
-    )
-
-
 def save_scan_metadata(
     *,
     scan_id: str,
@@ -100,9 +86,8 @@ def save_scan_metadata(
         "location": location,
         "source": source,
         "image": {"isDeleted": False},
-        "createdAt": firestore.SERVER_TIMESTAMP,
-        "status": "done",
         "timestamp": firestore.SERVER_TIMESTAMP,
+        "updatedAt": firestore.SERVER_TIMESTAMP,
     }
     get_firestore_client().collection("scans").document(scan_id).set(payload, merge=True)
 

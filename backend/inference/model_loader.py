@@ -8,22 +8,22 @@ from pathlib import Path
 from fastapi import FastAPI
 from ultralytics import YOLO
 
+from backend.core.config import settings
 from backend.inference.class_mapper import ClassMapper
-
-WEIGHTS_PATH = Path(__file__).resolve().parents[1] / "assets" / "best.pt"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load YOLO26-M once at startup and expose it via app.state."""
-    if not WEIGHTS_PATH.exists():
+    weights_path = Path(settings.YOLO_WEIGHTS_PATH).expanduser()
+    if not weights_path.exists():
         raise RuntimeError(
-            f"YOLO weights not found at {WEIGHTS_PATH}. App startup failed."
+            f"YOLO weights not found at {weights_path}. App startup failed."
         )
 
-    app.state.yolo_model = YOLO(str(WEIGHTS_PATH))
+    app.state.yolo_model = YOLO(str(weights_path))
     app.state.class_mapper = ClassMapper()
-    print("YOLO26-M loaded successfully (640x640)")
+    print(f"YOLO26-M loaded successfully from {weights_path}")
 
     try:
         yield

@@ -4,29 +4,27 @@ Muzhir Backend — FastAPI application entry point (placeholder).
 Mount route modules from `routers/` as endpoints are implemented.
 """
 
-from pathlib import Path
 from datetime import datetime, timezone
 import re
 from uuid import uuid4
 
-from dotenv import load_dotenv
-from fastapi import FastAPI, File, Form, HTTPException, Query, Response, UploadFile, status
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, Response, UploadFile, status
+from fastapi.responses import JSONResponse
 from firebase_admin import firestore
 
-# Load env values before any module reads os.environ (Cloudinary/Firebase/Groq).
-load_dotenv(Path(__file__).resolve().parent / ".env", override=False)
-load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
-
+from backend.core.activity_logger import log_action
 from backend.core.cloudinary_uploader import delete_image, upload_image, upload_image_asset
+from backend.core.config import settings
 from backend.core.firebase_config import (
     get_firestore_client,
-    get_user_document,
-    log_activity,
     get_scan_document,
+    get_user_document,
     save_scan_metadata,
     soft_delete_scan,
     update_user_profile_image,
 )
+from backend.middleware.auth import verify_token
+from backend.core.status_manager import set_scan_status
 from backend.inference.llm_caller import get_recommendation
 from backend.inference.model_loader import lifespan
 from backend.inference.runner import InferenceResult, run_inference
@@ -42,7 +40,56 @@ from backend.schemas.responses import (
     ScanSummary,
 )
 
-app = FastAPI(title="Muzhir Backend", version="0.1.0", lifespan=lifespan)
+OPENAPI_TAGS = [
+    {
+        "name": "System Health",
+        "description": "Operational health and service availability endpoints.",
+    },
+    {
+        "name": "Diagnosis",
+        "description": "Image upload, disease inference, and diagnosis response workflows.",
+    },
+    {
+        "name": "History",
+        "description": "Authenticated scan history retrieval and per-scan detail access.",
+    },
+    {
+        "name": "User Profile",
+        "description": "Authenticated profile image management and user schema helpers.",
+    },
+]
+
+AUTH_RESPONSES = {
+    401: {"description": "Unauthorized. A valid Firebase Bearer token is required."},
+    503: {"description": "Service unavailable. An upstream dependency is temporarily unavailable."},
+}
+OWNER_SCAN_RESPONSES = {
+    **AUTH_RESPONSES,
+    403: {"description": "Forbidden. The authenticated user does not own this scan."},
+    404: {"description": "Scan not found."},
+}
+PROFILE_RESPONSES = {
+    **AUTH_RESPONSES,
+    404: {"description": "User profile or profile image was not found."},
+}
+
+app = FastAPI(
+    title="Muzhir (مُزهِر) API - Smart Agriculture System",
+    version=settings.APP_VERSION,
+    description=(
+        "Advanced backend for plant disease detection using YOLOv8, Groq LLM, and "
+        "Cloudinary. Integrated with Firebase Auth and Firestore."
+    ),
+    contact={"name": "Bader"},
+    lifespan=lifespan,
+    openapi_tags=OPENAPI_TAGS,
+    docs_url="/docs" if settings.SHOW_DOCS else None,
+    redoc_url="/redoc" if settings.SHOW_DOCS else None,
+    openapi_url="/openapi.json" if settings.SHOW_DOCS else None,
+    swagger_ui_parameters={"persistAuthorization": True},
+)
+
+# TODO: Log `login` actions once auth middleware is finalized.
 
 
 def _validate_image_upload(image: UploadFile) -> None:
@@ -50,19 +97,80 @@ def _validate_image_upload(image: UploadFile) -> None:
         raise HTTPException(status_code=400, detail="Only image uploads are supported.")
 
 
-@app.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
+@app.get("/health", include_in_schema=False)
+@app.get(
+    "/api/v1/health",
+    response_model=None,
+    tags=["System Health"],
+    summary="Health check",
+    description=(
+        "Checks the public API health by verifying that the YOLO model is loaded, Firestore "
+        "is reachable, and the configured application version is available for operators and probes."
+    ),
+    responses={
+        503: {"description": "Service unavailable. The API is running but a dependency is unhealthy."},
+    },
+)
+async def health():
+    yolo_status = "Loaded" if getattr(app.state, "yolo_model", None) is not None else "Error"
+    firestore_status = "Error"
+    errors: list[str] = []
+
+    try:
+        list(get_firestore_client().collection("scans").limit(1).stream())
+        firestore_status = "Connected"
+    except Exception as exc:
+        errors.append(f"Firestore health check failed: {exc}")
+
+    payload = {
+        "api_status": "OK",
+        "yolo_model": yolo_status,
+        "firestore": firestore_status,
+        "version": settings.APP_VERSION,
+    }
+
+    if yolo_status != "Loaded":
+        errors.append("YOLO model is not loaded.")
+
+    if errors:
+        payload["api_status"] = "ERROR"
+        payload["errors"] = errors
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content=payload,
+        )
+
+    return payload
 
 
-@app.post("/api/v1/test/user", response_model=UserModel)
-async def test_user(body: UserModel) -> UserModel:
+@app.post(
+    "/api/v1/test/user",
+    response_model=UserModel,
+    tags=["User Profile"],
+    summary="Validate user schema",
+    description=(
+        "Echoes a `UserModel` payload so developers can inspect and validate the generated "
+        "user schema in Swagger during integration work."
+    ),
+    responses=AUTH_RESPONSES,
+)
+async def test_user(body: UserModel, user_id: str = Depends(verify_token)) -> UserModel:
     """Temporary route to validate [UserModel] in Swagger (e.g. `preferredLanguage`: `fr` → 422)."""
     return body
 
 
-@app.post("/api/v1/test/scan", response_model=ScanModel)
-async def test_scan(body: ScanModel) -> ScanModel:
+@app.post(
+    "/api/v1/test/scan",
+    response_model=ScanModel,
+    tags=["Diagnosis"],
+    summary="Validate scan schema",
+    description=(
+        "Echoes a full `ScanModel` payload for documentation and client contract validation, "
+        "including embedded crop, image, and diagnosis structures."
+    ),
+    responses=AUTH_RESPONSES,
+)
+async def test_scan(body: ScanModel, user_id: str = Depends(verify_token)) -> ScanModel:
     """Validate a full [ScanModel] in Swagger.
 
     Required: `userId`, `image.imageUrl`, `crop` (with `cropNameAr`). Omit `diagnosis` for pending scans.
@@ -173,28 +281,40 @@ def _normalize_image_status(status_value: str | None) -> str:
 @app.post(
     "/api/v1/diagnose",
     response_model=DiagnoseUploadResponse,
-    summary="Upload scan image and trigger diagnosis pipeline",
+    tags=["Diagnosis"],
+    summary="Diagnose crop image",
+    description=(
+        "Accepts an authenticated image upload, stores it in Cloudinary, creates the Firestore "
+        "scan record, runs YOLOv8 inference plus Groq recommendation generation, updates "
+        "scan lifecycle status, and logs the upload activity in the background."
+    ),
+    responses={
+        **AUTH_RESPONSES,
+        403: {"description": "Forbidden. The authenticated user is not allowed to create this resource."},
+        404: {"description": "Related crop metadata was not found."},
+    },
 )
 async def diagnose(
+    background_tasks: BackgroundTasks,
     image: UploadFile = File(...),
-    userId: str = Form(...),
     cropId: str = Form(...),
     growthStageId: str = Form(...),
     location: str | None = Form(None),
     source: str = Form("mobile"),
+    user_id: str = Depends(verify_token),
 ) -> DiagnoseUploadResponse:
     """Accept a multipart scan request, upload to Cloudinary, then persist metadata."""
     if image.content_type is None or not image.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Only image uploads are supported.")
-    normalized_user_id = userId.strip()
+    normalized_user_id = user_id.strip()
     normalized_crop_id = cropId.strip()
     normalized_growth_stage_id = growthStageId.strip()
     normalized_location = location.strip() if location and location.strip() else "Unknown"
     normalized_source = source.strip() if source and source.strip() else "mobile"
-    if not normalized_user_id or not normalized_crop_id or not normalized_growth_stage_id:
+    if not normalized_crop_id or not normalized_growth_stage_id:
         raise HTTPException(
             status_code=400,
-            detail="userId, cropId, and growthStageId are required form fields.",
+            detail="cropId and growthStageId are required form fields.",
         )
 
     image_bytes = await image.read()
@@ -202,6 +322,7 @@ async def diagnose(
         raise HTTPException(status_code=400, detail="Uploaded image is empty.")
 
     scan_id = uuid4().hex
+    scan_document_created = False
 
     try:
         image_url = upload_image(
@@ -225,65 +346,84 @@ async def diagnose(
     class_mapper = app.state.class_mapper
 
     try:
+        get_firestore_client().collection("scans").document(scan_id).set(
+            {
+                "scanId": scan_id,
+                "userId": normalized_user_id,
+                "imageUrl": image_url,
+                "cropId": normalized_crop_id,
+                "growthStageId": normalized_growth_stage_id,
+                "location": normalized_location,
+                "source": normalized_source,
+                "image": {
+                    "imageUrl": image_url,
+                    "isDeleted": False,
+                },
+                "createdAt": firestore.SERVER_TIMESTAMP,
+                "timestamp": firestore.SERVER_TIMESTAMP,
+                "updatedAt": firestore.SERVER_TIMESTAMP,
+            },
+            merge=True,
+        )
+        scan_document_created = True
+        set_scan_status(scan_id, "pending")
+
+        set_scan_status(scan_id, "processing")
         inference_result = run_inference(image_bytes, model)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        disease_name = "No disease detected"
+        confidence_score = 0.0
+        is_healthy = True
+        recommendation_payload: dict[str, str] = {
+            "text_ar": "",
+            "text_en": "",
+        }
 
-    disease_name = "No disease detected"
-    confidence_score = 0.0
-    is_healthy = True
-    recommendation_payload: dict[str, str] = {
-        "text_ar": "",
-        "text_en": "",
-    }
-
-    if inference_result is None:
-        _no_disease_diagnosis()
-    else:
-        try:
-            print(f"DEBUG: YOLO detected Class ID: {inference_result.class_id}")
-            severity_label = (
-                "high"
-                if inference_result.confidence >= 0.8
-                else "medium" if inference_result.confidence >= 0.5 else "low"
-            )
-            disease_snapshot = class_mapper.get_disease_snapshot(inference_result.class_id)
-            mapped_name = str(disease_snapshot["diseaseName"])
-            yolo_name = inference_result.yolo_label
-            if mapped_name.strip().lower().replace("_", " ") != yolo_name.strip().lower().replace(
-                "_", " "
-            ):
-                print(
-                    "DEBUG: Mapping mismatch detected."
-                    f" ClassMap='{mapped_name}' vs YOLO='{yolo_name}'."
-                    " Using YOLO label mapping."
+        if inference_result is None:
+            _no_disease_diagnosis()
+        else:
+            try:
+                print(f"DEBUG: YOLO detected Class ID: {inference_result.class_id}")
+                severity_label = (
+                    "high"
+                    if inference_result.confidence >= 0.8
+                    else "medium" if inference_result.confidence >= 0.5 else "low"
                 )
-                disease_snapshot = class_mapper.get_disease_snapshot_by_en_name(yolo_name)
+                disease_snapshot = class_mapper.get_disease_snapshot(inference_result.class_id)
+                mapped_name = str(disease_snapshot["diseaseName"])
+                yolo_name = inference_result.yolo_label
+                if mapped_name.strip().lower().replace(
+                    "_", " "
+                ) != yolo_name.strip().lower().replace("_", " "):
+                    print(
+                        "DEBUG: Mapping mismatch detected."
+                        f" ClassMap='{mapped_name}' vs YOLO='{yolo_name}'."
+                        " Using YOLO label mapping."
+                    )
+                    disease_snapshot = class_mapper.get_disease_snapshot_by_en_name(yolo_name)
 
-            disease_name_en = str(disease_snapshot["diseaseName"])
-            context = {
-                "disease_name": disease_name_en,
-                "severity": severity_label,
-                "crop_type": normalized_crop_id,
-                "growth_stage": normalized_growth_stage_id,
-            }
-            recommendation = await get_recommendation(context)
-            disease_name = disease_name_en
-            confidence_score = float(inference_result.confidence)
-            is_healthy = disease_name_en.strip().lower() in {"no disease", "no disease detected"}
-            recommendation_payload = {
-                "text_ar": recommendation.treatment_text_ar,
-                "text_en": recommendation.treatment_text,
-            }
-            _build_diagnosis_block(
-                inference_result,
-                disease_snapshot,
-                recommendation=recommendation,
-            )
-        except KeyError as exc:
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+                disease_name_en = str(disease_snapshot["diseaseName"])
+                context = {
+                    "disease_name": disease_name_en,
+                    "severity": severity_label,
+                    "crop_type": normalized_crop_id,
+                    "growth_stage": normalized_growth_stage_id,
+                }
+                recommendation = await get_recommendation(context)
+                disease_name = disease_name_en
+                confidence_score = float(inference_result.confidence)
+                is_healthy = disease_name_en.strip().lower() in {"no disease", "no disease detected"}
+                recommendation_payload = {
+                    "text_ar": recommendation.treatment_text_ar,
+                    "text_en": recommendation.treatment_text,
+                }
+                _build_diagnosis_block(
+                    inference_result,
+                    disease_snapshot,
+                    recommendation=recommendation,
+                )
+            except KeyError as exc:
+                raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    try:
         save_scan_metadata(
             scan_id=scan_id,
             user_id=normalized_user_id,
@@ -297,11 +437,43 @@ async def diagnose(
             location=normalized_location,
             source=normalized_source,
         )
+        set_scan_status(scan_id, "done")
+    except ValueError as exc:
+        if scan_document_created:
+            try:
+                set_scan_status(scan_id, "failed")
+            except Exception:
+                pass
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except HTTPException as exc:
+        if scan_document_created:
+            try:
+                set_scan_status(scan_id, "failed")
+            except Exception:
+                pass
+        raise exc
     except Exception as exc:
+        if scan_document_created:
+            try:
+                set_scan_status(scan_id, "failed")
+            except Exception:
+                pass
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to persist scan metadata: {exc}",
+            detail=f"Failed to complete diagnosis pipeline: {exc}",
         ) from exc
+
+    background_tasks.add_task(
+        log_action,
+        normalized_user_id,
+        "upload",
+        scan_id,
+        {
+            "cropId": normalized_crop_id,
+            "growthStageId": normalized_growth_stage_id,
+            "source": normalized_source,
+        },
+    )
 
     return DiagnoseUploadResponse(
         scan_id=scan_id,
@@ -317,16 +489,23 @@ async def diagnose(
     )
 
 
-@app.post("/api/v1/profile-photo", summary="Upload profile photo to Cloudinary")
+@app.post(
+    "/api/v1/profile-photo",
+    tags=["User Profile"],
+    summary="Upload profile photo to Cloudinary",
+    description=(
+        "Uploads the authenticated user's profile image to Cloudinary, then persists the "
+        "resulting image URL and public id in Firestore."
+    ),
+    responses=PROFILE_RESPONSES,
+)
 async def upload_profile_photo(
-    user_id: str = Form(..., alias="userId"),
     image: UploadFile = File(...),
+    user_id: str = Depends(verify_token),
 ) -> dict[str, str]:
     """Upload profile photo and return Cloudinary URL/public id."""
     _validate_image_upload(image)
     normalized_user_id = user_id.strip()
-    if not normalized_user_id:
-        raise HTTPException(status_code=400, detail="userId cannot be empty.")
     try:
         user_doc = get_user_document(normalized_user_id)
     except Exception as exc:
@@ -379,16 +558,23 @@ async def upload_profile_photo(
     return {"imageUrl": image_url, "publicId": public_id}
 
 
-@app.delete("/api/v1/profile-photo", summary="Delete profile photo from Cloudinary")
+@app.delete(
+    "/api/v1/profile-photo",
+    tags=["User Profile"],
+    summary="Delete profile photo from Cloudinary",
+    description=(
+        "Deletes the authenticated user's current profile image from Cloudinary and clears "
+        "the related Firestore profile image fields."
+    ),
+    responses=PROFILE_RESPONSES,
+)
 async def delete_profile_photo(
-    user_id: str = Form(..., alias="userId"),
     image_url: str | None = Form(None, alias="imageUrl"),
     public_id: str | None = Form(None, alias="publicId"),
+    user_id: str = Depends(verify_token),
 ) -> dict[str, bool]:
     """Delete a profile photo by public id or image URL."""
     normalized_user_id = user_id.strip()
-    if not normalized_user_id:
-        raise HTTPException(status_code=400, detail="userId cannot be empty.")
     try:
         user_doc = get_user_document(normalized_user_id)
     except Exception as exc:
@@ -440,19 +626,27 @@ async def delete_profile_photo(
 
 
 @app.get(
-    "/api/v1/history/{userId}",
+    "/api/v1/history",
     response_model=list[ScanSummary],
-    summary="Get scan history for a user",
+    tags=["History"],
+    summary="List scan history",
+    description=(
+        "Returns the authenticated user's scan history from Firestore, with optional crop "
+        "filtering and lightweight summary data suitable for the mobile history screen."
+    ),
+    responses={
+        **AUTH_RESPONSES,
+        403: {"description": "Forbidden. The authenticated user cannot access this history."},
+        404: {"description": "No history resource was found for the authenticated user."},
+    },
 )
 async def get_history(
-    userId: str,
     limit: int = Query(20, ge=1, le=100),
     cropId: str | None = Query(None),
+    user_id: str = Depends(verify_token),
 ) -> list[ScanSummary]:
     """Return a lightweight scan history list for Flutter history screen."""
-    normalized_user_id = userId.strip()
-    if not normalized_user_id:
-        raise HTTPException(status_code=400, detail="userId cannot be empty.")
+    normalized_user_id = user_id.strip()
 
     normalized_crop_id = cropId.strip() if cropId and cropId.strip() else None
 
@@ -506,7 +700,7 @@ async def get_history(
         created_at = data.get("createdAt") or data.get("timestamp") or datetime.now(
             timezone.utc
         )
-        status_value = data.get("status") or image.get("status") or "done"
+        status_value = image.get("status") or data.get("status") or "done"
         severity_value = (
             data.get("severity")
             or data.get("diseaseSeverity")
@@ -532,14 +726,24 @@ async def get_history(
 @app.get(
     "/api/v1/scan/{scanId}",
     response_model=ScanModel,
-    summary="Get full scan details",
+    tags=["History"],
+    summary="Get scan details",
+    description=(
+        "Fetches one scan document, verifies that it belongs to the authenticated user, "
+        "hydrates the API response shape, and records a background view activity log."
+    ),
+    responses=OWNER_SCAN_RESPONSES,
 )
-async def get_scan(scanId: str, userId: str = Query(...)) -> ScanModel:
+async def get_scan(
+    scanId: str,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(verify_token),
+) -> ScanModel:
     """Fetch one scan, verify ownership, and return full scan payload."""
     normalized_scan_id = scanId.strip()
-    normalized_user_id = userId.strip()
-    if not normalized_scan_id or not normalized_user_id:
-        raise HTTPException(status_code=400, detail="scanId and userId are required.")
+    normalized_user_id = user_id.strip()
+    if not normalized_scan_id:
+        raise HTTPException(status_code=400, detail="scanId is required.")
 
     try:
         doc = get_scan_document(normalized_scan_id)
@@ -581,7 +785,7 @@ async def get_scan(scanId: str, userId: str = Query(...)) -> ScanModel:
 
     image_url = str(data.get("imageUrl") or image.get("imageUrl") or "")
     status_value = _normalize_image_status(
-        str(data.get("status") or image.get("status") or "done")
+        str(image.get("status") or data.get("status") or "done")
     )
 
     confidence_score = float(
@@ -665,20 +869,38 @@ async def get_scan(scanId: str, userId: str = Query(...)) -> ScanModel:
         "diagnosis": diagnosis_payload,
         "createdAt": created_at,
     }
+
+    background_tasks.add_task(
+        log_action,
+        normalized_user_id,
+        "view_scan",
+        normalized_scan_id,
+    )
+
     return ScanModel(**payload)
 
 
 @app.delete(
     "/api/v1/scan/{scanId}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Soft delete a scan",
+    tags=["History"],
+    summary="Delete scan",
+    description=(
+        "Soft deletes a scan by marking `image.isDeleted=true` in Firestore after ownership "
+        "verification, then records the delete action in the background."
+    ),
+    responses=OWNER_SCAN_RESPONSES,
 )
-async def delete_scan(scanId: str, userId: str = Query(...)) -> Response:
+async def delete_scan(
+    scanId: str,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(verify_token),
+) -> Response:
     """Soft delete a scan by marking `image.isDeleted=true` and logging activity."""
     normalized_scan_id = scanId.strip()
-    normalized_user_id = userId.strip()
-    if not normalized_scan_id or not normalized_user_id:
-        raise HTTPException(status_code=400, detail="scanId and userId are required.")
+    normalized_user_id = user_id.strip()
+    if not normalized_scan_id:
+        raise HTTPException(status_code=400, detail="scanId is required.")
 
     try:
         doc = get_scan_document(normalized_scan_id)
@@ -698,16 +920,18 @@ async def delete_scan(scanId: str, userId: str = Query(...)) -> Response:
 
     try:
         soft_delete_scan(normalized_scan_id)
-        log_activity(
-            scan_id=normalized_scan_id,
-            user_id=normalized_user_id,
-            action_type="delete_scan",
-        )
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to soft delete scan: {exc}",
         ) from exc
+
+    background_tasks.add_task(
+        log_action,
+        normalized_user_id,
+        "delete_scan",
+        normalized_scan_id,
+    )
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -715,9 +939,15 @@ async def delete_scan(scanId: str, userId: str = Query(...)) -> Response:
 @app.post(
     "/api/v1/test/diagnose",
     response_model=DiagnoseResponse,
-    summary="Test DiagnoseResponse schema",
+    tags=["Diagnosis"],
+    summary="Validate diagnose response schema",
+    description=(
+        "Echoes a `DiagnoseResponse` payload so frontend developers can inspect the clean "
+        "diagnosis response contract without internal Firestore-only fields."
+    ),
+    responses=AUTH_RESPONSES,
 )
-async def test_diagnose(body: DiagnoseResponse) -> DiagnoseResponse:
+async def test_diagnose(body: DiagnoseResponse, user_id: str = Depends(verify_token)) -> DiagnoseResponse:
     """Echo a [DiagnoseResponse] body — Swagger shows the clean diagnose payload (no `diagnosisId`, `recommendationId`, or `isDeleted`)."""
     return body
 
@@ -725,8 +955,14 @@ async def test_diagnose(body: DiagnoseResponse) -> DiagnoseResponse:
 @app.post(
     "/api/v1/test/history",
     response_model=HistoryResponse,
-    summary="Test HistoryResponse schema",
+    tags=["History"],
+    summary="Validate history response schema",
+    description=(
+        "Echoes a `HistoryResponse` payload for documentation and contract testing of the "
+        "history list wrapper returned to clients."
+    ),
+    responses=AUTH_RESPONSES,
 )
-async def test_history(body: HistoryResponse) -> HistoryResponse:
+async def test_history(body: HistoryResponse, user_id: str = Depends(verify_token)) -> HistoryResponse:
     """Echo a [HistoryResponse] body — Swagger shows the wrapped list of [ScanSummary] rows."""
     return body
