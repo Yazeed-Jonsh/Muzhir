@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:muzhir/core/api/api_service.dart';
 import 'package:muzhir/models/muzhir_user.dart';
 import 'package:muzhir/providers/connectivity_provider.dart';
 import 'package:muzhir/providers/user_stream_provider.dart';
@@ -1698,6 +1699,28 @@ class _AccountInfoCard extends StatelessWidget {
 class _SettingsActionsCard extends StatelessWidget {
   const _SettingsActionsCard();
 
+  Future<void> _onTestBackend(BuildContext context) async {
+    final ok = await ApiService().checkHealth();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        backgroundColor: ok ? MuzhirColors.forestGreen : MuzhirColors.earthyClayRed,
+        content: Text(
+          ok
+              ? 'Backend health check succeeded.'
+              : 'Backend unreachable or unhealthy. See console for Dio logs.',
+          style: GoogleFonts.lexend(
+            color: MuzhirColors.cardWhite,
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _onSignOut(BuildContext context) async {
     await AuthService().signOut();
     if (!context.mounted) return;
@@ -1734,6 +1757,48 @@ class _SettingsActionsCard extends StatelessWidget {
               ),
             ),
           ),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => _onTestBackend(context),
+              borderRadius: BorderRadius.circular(16),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const SizedBox(
+                      width: 40,
+                      child: Center(
+                        child: Icon(
+                          Icons.cloud_done_outlined,
+                          color: MuzhirColors.forestGreen,
+                          size: 26,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Test backend connection',
+                        style: GoogleFonts.lexend(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: MuzhirColors.titleCharcoal,
+                        ),
+                      ),
+                    ),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: MuzhirColors.mutedGrey,
+                      size: 22,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const Divider(height: 1, thickness: 1, color: Color(0xFFE8EDE4)),
           Material(
             color: Colors.transparent,
             child: InkWell(

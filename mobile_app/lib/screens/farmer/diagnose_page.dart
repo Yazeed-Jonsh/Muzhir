@@ -1,10 +1,13 @@
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:dotted_border/dotted_border.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:muzhir/core/api/api_service.dart';
+import 'package:muzhir/models/diagnosis_response.dart';
 import 'package:muzhir/theme/app_theme.dart';
 import 'package:muzhir/widgets/crop_type_dropdown.dart';
 import 'package:muzhir/widgets/diagnosis_result_card.dart';
@@ -29,6 +32,7 @@ class _DiagnosePageState extends State<DiagnosePage> {
   String? _selectedCrop;
   bool _isAnalyzing = false;
   File? _selectedImage;
+  DiagnosisResponse? _diagnosisResult;
   final ImagePicker _picker = ImagePicker();
 
   double? _diagnosisLatitude;
@@ -144,23 +148,87 @@ class _DiagnosePageState extends State<DiagnosePage> {
       _selectedCrop = null;
       _selectedImage = null;
       _isAnalyzing = false;
+      _diagnosisResult = null;
       _diagnosisLatitude = null;
       _diagnosisLongitude = null;
     });
   }
 
+  String _messageFromDioException(DioException e) {
+    final data = e.response?.data;
+    if (data is Map && data['detail'] != null) {
+      final d = data['detail'];
+      if (d is String) return d;
+      if (d is List && d.isNotEmpty) return d.first.toString();
+    }
+    return e.message ?? 'Could not analyze image. Please try again.';
+  }
+
+  /// Backend `/diagnose` expects a stable crop id (e.g. `tomato`), not the display label.
+  String _cropIdForApi(String? displayCrop) {
+    final t = displayCrop?.trim().toLowerCase() ?? '';
+    if (t == 'tomato') return 'tomato';
+    return t.isEmpty ? 'tomato' : t.replaceAll(RegExp(r'\s+'), '_');
+  }
+
   Future<void> _onAnalyze() async {
     if (_selectedCrop == null || _selectedImage == null) return;
 
-    setState(() => _isAnalyzing = true);
-
-    await Future.delayed(const Duration(milliseconds: 1500));
-
-    if (!mounted) return;
     setState(() {
-      _isAnalyzing = false;
-      _state = _DiagnoseState.result;
+      _isAnalyzing = true;
+      _diagnosisResult = null;
     });
+
+    try {
+      final response = await ApiService().uploadImageForDiagnosis(
+        _selectedImage!,
+        cropId: _cropIdForApi(_selectedCrop),
+        growthStageId: 'vegetative',
+      );
+      if (!mounted) return;
+      setState(() {
+        _isAnalyzing = false;
+        _diagnosisResult = response;
+        _state = _DiagnoseState.result;
+      });
+    } on DioException catch (e) {
+      if (!mounted) return;
+      setState(() => _isAnalyzing = false);
+      final message = _messageFromDioException(e);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          backgroundColor: MuzhirColors.earthyClayRed,
+          content: Text(
+            message,
+            style: GoogleFonts.lexend(
+              color: MuzhirColors.cardWhite,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isAnalyzing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          backgroundColor: MuzhirColors.earthyClayRed,
+          content: Text(
+            'Analysis failed: $e',
+            style: GoogleFonts.lexend(
+              color: MuzhirColors.cardWhite,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      );
+    }
   }
 
   void _onScanAnother() {
@@ -169,9 +237,95 @@ class _DiagnosePageState extends State<DiagnosePage> {
       _selectedCrop = null;
       _selectedImage = null;
       _isAnalyzing = false;
+      _diagnosisResult = null;
       _diagnosisLatitude = null;
       _diagnosisLongitude = null;
     });
+  }
+
+  void _showTreatmentAdviceDialog(BuildContext context) {
+    final d = _diagnosisResult;
+    if (d == null) return;
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            'Treatment advice',
+            style: GoogleFonts.lexend(
+              fontWeight: FontWeight.w700,
+              color: MuzhirColors.titleCharcoal,
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'English',
+                  style: GoogleFonts.lexend(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: MuzhirColors.mutedGrey,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  d.recommendation.textEn.isEmpty
+                      ? '—'
+                      : d.recommendation.textEn,
+                  style: GoogleFonts.lexend(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    color: MuzhirColors.titleCharcoal,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'العربية',
+                  style: GoogleFonts.lexend(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: MuzhirColors.mutedGrey,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  d.recommendation.textAr.isEmpty
+                      ? '—'
+                      : d.recommendation.textAr,
+                  textDirection: TextDirection.rtl,
+                  style: GoogleFonts.lexend(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    color: MuzhirColors.titleCharcoal,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(
+                'Close',
+                style: GoogleFonts.lexend(
+                  fontWeight: FontWeight.w600,
+                  color: MuzhirColors.forestGreen,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _showCaptureSheet() {
@@ -638,13 +792,22 @@ class _DiagnosePageState extends State<DiagnosePage> {
   }
 
   Widget _buildResultSection(BuildContext context) {
+    final d = _diagnosisResult;
+    if (d == null) {
+      return const SizedBox.shrink();
+    }
+
+    final confidencePct =
+        (d.diagnosis.confidence * 100).round().clamp(0, 100);
+
     return Column(
       children: [
         DiagnosisResultCard(
           cropType: _selectedCrop ?? 'Tomato',
-          diseaseName: 'Early Blight',
-          confidencePercent: 87,
+          diseaseName: d.diagnosis.label,
+          confidencePercent: confidencePct,
           source: _selectedSource,
+          isHealthy: d.diagnosis.isHealthy,
           latitude: _diagnosisLatitude,
           longitude: _diagnosisLongitude,
         ),
@@ -653,7 +816,7 @@ class _DiagnosePageState extends State<DiagnosePage> {
           width: double.infinity,
           height: 52,
           child: OutlinedButton.icon(
-            onPressed: null,
+            onPressed: () => _showTreatmentAdviceDialog(context),
             icon: const Icon(Icons.lightbulb_outline_rounded),
             label: const Text('Get Treatment Advice'),
           ),
