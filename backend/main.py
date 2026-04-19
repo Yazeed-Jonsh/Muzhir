@@ -16,6 +16,7 @@ from backend.core.activity_logger import log_action
 from backend.core.cloudinary_uploader import delete_image, upload_image, upload_image_asset
 from backend.core.config import settings
 from backend.core.firebase_config import (
+    ensure_firebase_initialized,
     get_firestore_client,
     get_scan_document,
     get_user_document,
@@ -37,6 +38,7 @@ from backend.schemas.responses import (
     DiagnoseResponse,
     DiagnoseUploadResponse,
     HistoryResponse,
+    MapMarkerItem,
     ScanSummary,
 )
 
@@ -52,6 +54,10 @@ OPENAPI_TAGS = [
     {
         "name": "History",
         "description": "Authenticated scan history retrieval and per-scan detail access.",
+    },
+    {
+        "name": "Map",
+        "description": "Geolocated scan markers for the farmer map.",
     },
     {
         "name": "User Profile",
@@ -88,6 +94,9 @@ app = FastAPI(
     openapi_url="/openapi.json" if settings.SHOW_DOCS else None,
     swagger_ui_parameters={"persistAuthorization": True},
 )
+
+# Default Firebase Admin app (Auth + Firestore). Idempotent for uvicorn --reload.
+ensure_firebase_initialized()
 
 # TODO: Log `login` actions once auth middleware is finalized.
 
@@ -301,6 +310,8 @@ async def diagnose(
     growthStageId: str = Form(...),
     location: str | None = Form(None),
     source: str = Form("mobile"),
+    latitude: float | None = Form(None),
+    longitude: float | None = Form(None),
     user_id: str = Depends(verify_token),
 ) -> DiagnoseUploadResponse:
     """Accept a multipart scan request, upload to Cloudinary, then persist metadata."""
@@ -311,6 +322,8 @@ async def diagnose(
     normalized_growth_stage_id = growthStageId.strip()
     normalized_location = location.strip() if location and location.strip() else "Unknown"
     normalized_source = source.strip() if source and source.strip() else "mobile"
+    capture_latitude = float(latitude) if latitude is not None else None
+    capture_longitude = float(longitude) if longitude is not None else None
     if not normalized_crop_id or not normalized_growth_stage_id:
         raise HTTPException(
             status_code=400,
@@ -436,6 +449,8 @@ async def diagnose(
             growth_stage_id=normalized_growth_stage_id,
             location=normalized_location,
             source=normalized_source,
+            latitude=capture_latitude,
+            longitude=capture_longitude,
         )
         set_scan_status(scan_id, "done")
     except ValueError as exc:
@@ -486,6 +501,8 @@ async def diagnose(
             "is_healthy": is_healthy,
         },
         recommendation=recommendation_payload,
+        latitude=capture_latitude,
+        longitude=capture_longitude,
     )
 
 
@@ -707,6 +724,16 @@ async def get_history(
             or disease.get("severity")
         )
         image_url = data.get("imageUrl") or image.get("imageUrl") or ""
+        disease_name_raw = (
+            data.get("diseaseName")
+            or diagnosis.get("diseaseName")
+            or disease.get("diseaseName")
+        )
+        disease_name_value: str | None
+        if disease_name_raw is None or str(disease_name_raw).strip() == "":
+            disease_name_value = None
+        else:
+            disease_name_value = str(disease_name_raw).strip()
 
         history.append(
             ScanSummary(
@@ -717,10 +744,139 @@ async def get_history(
                 status=status_value,
                 severity=severity_value,
                 image_url=str(image_url),
+                disease_name=disease_name_value,
             )
         )
 
     return history
+
+
+def _capture_coordinate(value: object) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _scan_is_healthy_row(data: dict, disease_label: str) -> bool:
+    if data.get("isHealthy") is True:
+        return True
+    dl = disease_label.lower()
+    return "healthy" in dl or "no disease" in dl
+
+
+@app.get(
+    "/api/v1/map-markers",
+    response_model=list[MapMarkerItem],
+    tags=["Map"],
+    summary="List map markers",
+    description=(
+        "Returns scans for the authenticated user that include stored GPS coordinates, "
+        "optionally filtered by crop id (same values as `cropId` on diagnose)."
+    ),
+    responses={
+        **AUTH_RESPONSES,
+        500: {"description": "Failed to read scans from storage."},
+    },
+)
+async def get_map_markers(
+    crop: str | None = Query(
+        None,
+        description="Optional crop id filter (e.g. tomato, corn).",
+    ),
+    limit: int = Query(200, ge=1, le=500),
+    user_id: str = Depends(verify_token),
+) -> list[MapMarkerItem]:
+    """Geolocated pins for the mobile map; skips scans without capture coordinates."""
+    normalized_user_id = user_id.strip()
+    normalized_crop_id = crop.strip() if crop and crop.strip() else None
+
+    try:
+        scans_query = get_firestore_client().collection("scans").where(
+            "userId", "==", normalized_user_id
+        )
+        if normalized_crop_id is not None:
+            scans_query = scans_query.where("cropId", "==", normalized_crop_id)
+        scans_query = scans_query.order_by(
+            "createdAt", direction=firestore.Query.DESCENDING
+        ).limit(limit)
+        docs = list(scans_query.stream())
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch map markers: {exc}",
+        ) from exc
+
+    markers: list[MapMarkerItem] = []
+    for doc in docs:
+        data = doc.to_dict() or {}
+        crop = data.get("crop") if isinstance(data.get("crop"), dict) else {}
+        image = data.get("image") if isinstance(data.get("image"), dict) else {}
+        if bool(image.get("isDeleted", False)):
+            continue
+
+        lat = _capture_coordinate(data.get("captureLatitude"))
+        lon = _capture_coordinate(data.get("captureLongitude"))
+        if lat is None or lon is None:
+            continue
+
+        diagnosis = (
+            data.get("diagnosis") if isinstance(data.get("diagnosis"), dict) else {}
+        )
+        disease = (
+            diagnosis.get("disease")
+            if isinstance(diagnosis.get("disease"), dict)
+            else {}
+        )
+        disease_name_raw = (
+            data.get("diseaseName")
+            or diagnosis.get("diseaseName")
+            or disease.get("diseaseName")
+        )
+        disease_label = (
+            str(disease_name_raw).strip()
+            if disease_name_raw is not None and str(disease_name_raw).strip()
+            else "No disease detected"
+        )
+
+        crop_name = (
+            data.get("cropName")
+            or crop.get("cropName")
+            or data.get("cropId")
+            or crop.get("cropId")
+            or "Unknown"
+        )
+        scan_id = str(data.get("scanId") or doc.id)
+        created_raw = data.get("createdAt") or data.get("timestamp")
+        if isinstance(created_raw, datetime):
+            created_at = created_raw
+            if created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=timezone.utc)
+        elif isinstance(created_raw, str) and created_raw.strip():
+            try:
+                raw = created_raw.replace("Z", "+00:00")
+                created_at = datetime.fromisoformat(raw)
+                if created_at.tzinfo is None:
+                    created_at = created_at.replace(tzinfo=timezone.utc)
+            except ValueError:
+                created_at = datetime.now(timezone.utc)
+        else:
+            created_at = datetime.now(timezone.utc)
+
+        markers.append(
+            MapMarkerItem(
+                scan_id=scan_id,
+                latitude=lat,
+                longitude=lon,
+                crop_type=str(crop_name),
+                is_healthy=_scan_is_healthy_row(data, disease_label),
+                created_at=created_at,
+            )
+        )
+
+    return markers
 
 
 @app.get(
@@ -849,6 +1005,17 @@ async def get_scan(
 
     created_at = data.get("createdAt") or data.get("timestamp") or datetime.now(timezone.utc)
 
+    def _coerce_optional_float(value: object) -> float | None:
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    cap_lat = _coerce_optional_float(data.get("captureLatitude"))
+    cap_lon = _coerce_optional_float(data.get("captureLongitude"))
+
     payload = {
         "userId": owner_user_id,
         "image": {
@@ -869,6 +1036,10 @@ async def get_scan(
         "diagnosis": diagnosis_payload,
         "createdAt": created_at,
     }
+    if cap_lat is not None:
+        payload["latitude"] = cap_lat
+    if cap_lon is not None:
+        payload["longitude"] = cap_lon
 
     background_tasks.add_task(
         log_action,

@@ -3,6 +3,7 @@ from backend.schemas.responses import (
     DiagnoseUploadResponse,
     DiagnosisBlock,
     HistoryResponse,
+    MapMarkerItem,
     RecommendationBlock,
     ScanSummary,
 )
@@ -12,6 +13,7 @@ __all__ = [
     "DiagnoseUploadResponse",
     "DiagnosisBlock",
     "HistoryResponse",
+    "MapMarkerItem",
     "RecommendationBlock",
     "ScanSummary",
 ]

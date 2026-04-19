@@ -1,17 +1,20 @@
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dio/dio.dart';
 import 'package:dotted_border/dotted_border.dart';
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:muzhir/core/api/api_service.dart';
 import 'package:muzhir/models/diagnosis_response.dart';
+import 'package:muzhir/models/scan_history_item.dart';
+import 'package:muzhir/screens/farmer/diagnosis_result_detail_screen.dart';
 import 'package:muzhir/theme/app_theme.dart';
 import 'package:muzhir/widgets/crop_type_dropdown.dart';
 import 'package:muzhir/widgets/diagnosis_result_card.dart';
 import 'package:muzhir/widgets/recent_scan_tile.dart';
+import 'package:muzhir/widgets/treatment_advice_dialog.dart';
 
 enum _DiagnoseState { idle, preview, result }
 
@@ -35,26 +38,7 @@ class _DiagnosePageState extends State<DiagnosePage> {
   DiagnosisResponse? _diagnosisResult;
   final ImagePicker _picker = ImagePicker();
 
-  double? _diagnosisLatitude;
-  double? _diagnosisLongitude;
-
-  static final List<_RecentDiagnosisItem> _mockRecent = [
-    const _RecentDiagnosisItem(
-      plantName: 'Tomato',
-      isHealthy: true,
-      timeLabel: '2 hours ago',
-    ),
-    const _RecentDiagnosisItem(
-      plantName: 'Bell Pepper',
-      isHealthy: false,
-      timeLabel: 'Yesterday',
-    ),
-    const _RecentDiagnosisItem(
-      plantName: 'Cucumber',
-      isHealthy: true,
-      timeLabel: '3 days ago',
-    ),
-  ];
+  List<ScanHistoryItem> _recentScans = [];
 
   static ScanSource _scanSourceFromImageSource(ImageSource source) {
     switch (source) {
@@ -64,60 +48,56 @@ class _DiagnosePageState extends State<DiagnosePage> {
     }
   }
 
-  Future<void> _getCurrentLocation() async {
-    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      if (mounted) {
-        setState(() {
-          _diagnosisLatitude = null;
-          _diagnosisLongitude = null;
-        });
-      }
-      return;
-    }
+  @override
+  void initState() {
+    super.initState();
+    _fetchRecentScans();
+  }
 
-    var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      if (mounted) {
-        setState(() {
-          _diagnosisLatitude = null;
-          _diagnosisLongitude = null;
-        });
-      }
-      return;
-    }
-
+  Future<void> _fetchRecentScans() async {
     try {
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-        ),
-      );
-      if (mounted) {
-        setState(() {
-          _diagnosisLatitude = position.latitude;
-          _diagnosisLongitude = position.longitude;
-        });
-      }
+      final list = await ApiService().getScanHistory(limit: 3);
+      if (!mounted) return;
+      setState(() => _recentScans = list);
     } catch (_) {
-      if (mounted) {
-        setState(() {
-          _diagnosisLatitude = null;
-          _diagnosisLongitude = null;
-        });
-      }
+      // Keep existing list on failure (e.g. offline); first load stays empty.
     }
+  }
+
+  String _recentDiagnosisLabel(ScanHistoryItem item) {
+    final name = item.diseaseName?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    if (item.status == 'pending' || item.status == 'processing') {
+      return 'Analysis in progress';
+    }
+    return 'No diagnosis yet';
+  }
+
+  String _recentRelativeTime(DateTime t) {
+    final now = DateTime.now();
+    final d = now.difference(t);
+    if (d.isNegative) return 'Just now';
+    if (d.inSeconds < 45) return 'Just now';
+    if (d.inMinutes < 60) return '${d.inMinutes} min ago';
+    if (d.inHours < 24) return '${d.inHours} hours ago';
+    if (d.inDays < 7) return '${d.inDays} days ago';
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${months[t.month - 1]} ${t.day}, ${t.year}';
+  }
+
+  bool _recentLooksHealthy(String label) {
+    final l = label.toLowerCase();
+    return l.contains('healthy') ||
+        l.contains('no disease') ||
+        l.contains('no disease detected');
   }
 
   Future<void> _pickImage(ImageSource source) async {
     final XFile? pickedFile = await _picker.pickImage(source: source);
     if (pickedFile != null && mounted) {
-      await _getCurrentLocation();
-      if (!mounted) return;
       setState(() {
         _selectedImage = File(pickedFile.path);
         _selectedSource = _scanSourceFromImageSource(source);
@@ -131,8 +111,6 @@ class _DiagnosePageState extends State<DiagnosePage> {
     final XFile? pickedFile =
         await _picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null && mounted) {
-      await _getCurrentLocation();
-      if (!mounted) return;
       setState(() {
         _selectedImage = File(pickedFile.path);
         _selectedSource = ScanSource.drone;
@@ -149,8 +127,6 @@ class _DiagnosePageState extends State<DiagnosePage> {
       _selectedImage = null;
       _isAnalyzing = false;
       _diagnosisResult = null;
-      _diagnosisLatitude = null;
-      _diagnosisLongitude = null;
     });
   }
 
@@ -162,6 +138,84 @@ class _DiagnosePageState extends State<DiagnosePage> {
       if (d is List && d.isNotEmpty) return d.first.toString();
     }
     return e.message ?? 'Could not analyze image. Please try again.';
+  }
+
+  String _messageFromDioScanDetail(DioException e) {
+    final data = e.response?.data;
+    if (data is Map && data['detail'] != null) {
+      final d = data['detail'];
+      if (d is String) return d;
+      if (d is List && d.isNotEmpty) return d.first.toString();
+    }
+    return e.message ?? 'Could not load scan details.';
+  }
+
+  Future<void> _openDiagnosisDetail(
+    BuildContext context,
+    ScanHistoryItem item,
+  ) async {
+    final navigator = Navigator.of(context);
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => Center(
+        child: CircularProgressIndicator(
+          strokeWidth: 2.5,
+          color: MuzhirColors.forestGreen.withValues(alpha: 0.85),
+        ),
+      ),
+    );
+    try {
+      final diagnosis = await ApiService().getScanDiagnosis(item.scanId);
+      navigator.pop();
+      if (!context.mounted) return;
+      await navigator.push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => DiagnosisResultDetailScreen(
+            diagnosis: diagnosis,
+            cropType: item.cropName,
+          ),
+        ),
+      );
+    } on DioException catch (e) {
+      if (context.mounted) {
+        navigator.pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            backgroundColor: MuzhirColors.earthyClayRed,
+            content: Text(
+              _messageFromDioScanDetail(e),
+              style: GoogleFonts.lexend(
+                color: MuzhirColors.cardWhite,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        navigator.pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            backgroundColor: MuzhirColors.earthyClayRed,
+            content: Text(
+              'Could not open scan: $e',
+              style: GoogleFonts.lexend(
+                color: MuzhirColors.cardWhite,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        );
+      }
+    }
   }
 
   /// Backend `/diagnose` expects a stable crop id (e.g. `tomato`), not the display label.
@@ -191,6 +245,7 @@ class _DiagnosePageState extends State<DiagnosePage> {
         _diagnosisResult = response;
         _state = _DiagnoseState.result;
       });
+      await _fetchRecentScans();
     } on DioException catch (e) {
       if (!mounted) return;
       setState(() => _isAnalyzing = false);
@@ -238,94 +293,13 @@ class _DiagnosePageState extends State<DiagnosePage> {
       _selectedImage = null;
       _isAnalyzing = false;
       _diagnosisResult = null;
-      _diagnosisLatitude = null;
-      _diagnosisLongitude = null;
     });
   }
 
   void _showTreatmentAdviceDialog(BuildContext context) {
     final d = _diagnosisResult;
     if (d == null) return;
-
-    showDialog<void>(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Text(
-            'Treatment advice',
-            style: GoogleFonts.lexend(
-              fontWeight: FontWeight.w700,
-              color: MuzhirColors.titleCharcoal,
-            ),
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'English',
-                  style: GoogleFonts.lexend(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: MuzhirColors.mutedGrey,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  d.recommendation.textEn.isEmpty
-                      ? '—'
-                      : d.recommendation.textEn,
-                  style: GoogleFonts.lexend(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    color: MuzhirColors.titleCharcoal,
-                    height: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Text(
-                  'العربية',
-                  style: GoogleFonts.lexend(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: MuzhirColors.mutedGrey,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  d.recommendation.textAr.isEmpty
-                      ? '—'
-                      : d.recommendation.textAr,
-                  textDirection: TextDirection.rtl,
-                  style: GoogleFonts.lexend(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    color: MuzhirColors.titleCharcoal,
-                    height: 1.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: Text(
-                'Close',
-                style: GoogleFonts.lexend(
-                  fontWeight: FontWeight.w600,
-                  color: MuzhirColors.forestGreen,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
+    presentTreatmentAdviceDialog(context, d);
   }
 
   void _showCaptureSheet() {
@@ -799,6 +773,9 @@ class _DiagnosePageState extends State<DiagnosePage> {
 
     final confidencePct =
         (d.diagnosis.confidence * 100).round().clamp(0, 100);
+    final isHealthy = d.diagnosis.isHealthy;
+    final isAr =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
 
     return Column(
       children: [
@@ -808,19 +785,41 @@ class _DiagnosePageState extends State<DiagnosePage> {
           confidencePercent: confidencePct,
           source: _selectedSource,
           isHealthy: d.diagnosis.isHealthy,
-          latitude: _diagnosisLatitude,
-          longitude: _diagnosisLongitude,
+          latitude: d.latitude,
+          longitude: d.longitude,
         ),
-        const SizedBox(height: 16),
-        SizedBox(
-          width: double.infinity,
-          height: 52,
-          child: OutlinedButton.icon(
-            onPressed: () => _showTreatmentAdviceDialog(context),
-            icon: const Icon(Icons.lightbulb_outline_rounded),
-            label: const Text('Get Treatment Advice'),
+        if (!isHealthy) ...[
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: OutlinedButton.icon(
+              onPressed: () => _showTreatmentAdviceDialog(context),
+              icon: const Icon(Icons.lightbulb_outline_rounded),
+              label: Text(
+                isAr ? 'عرض نصائح العلاج' : 'Get Treatment Advice',
+              ),
+            ),
           ),
-        ),
+        ] else ...[
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text(
+              isAr
+                  ? 'نباتك بصحة جيدة! لا حاجة للعلاج.'
+                  : 'Your plant is healthy! No treatment needed.',
+              textAlign: TextAlign.center,
+              textDirection: isAr ? TextDirection.rtl : TextDirection.ltr,
+              style: GoogleFonts.lexend(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: MuzhirColors.coreLeafGreen,
+                height: 1.45,
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 12),
         SizedBox(
           width: double.infinity,
@@ -872,104 +871,175 @@ class _DiagnosePageState extends State<DiagnosePage> {
           ],
         ),
         const SizedBox(height: 12),
-        ..._mockRecent.map(
-          (item) => Padding(
-            padding: const EdgeInsets.only(bottom: 20),
-            child: _RecentDiagnosisCard(item: item),
+        if (_recentScans.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              'No recent scans yet. Run an analysis above to see your latest results here.',
+              style: GoogleFonts.lexend(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: MuzhirColors.mutedGrey,
+                height: 1.4,
+              ),
+            ),
+          )
+        else
+          ..._recentScans.map(
+            (scan) {
+              final label = _recentDiagnosisLabel(scan);
+              final healthy = _recentLooksHealthy(label);
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 20),
+                child: _RecentDiagnosisCard(
+                  cropName: scan.cropName,
+                  diagnosisLabel: label,
+                  timeLabel: _recentRelativeTime(scan.createdAt),
+                  isHealthy: healthy,
+                  imageUrl: scan.imageUrl,
+                  onTap: () => _openDiagnosisDetail(context, scan),
+                ),
+              );
+            },
           ),
-        ),
       ],
     );
   }
 }
 
-class _RecentDiagnosisItem {
-  const _RecentDiagnosisItem({
-    required this.plantName,
-    required this.isHealthy,
+class _RecentDiagnosisCard extends StatelessWidget {
+  const _RecentDiagnosisCard({
+    required this.cropName,
+    required this.diagnosisLabel,
     required this.timeLabel,
+    required this.isHealthy,
+    required this.imageUrl,
+    required this.onTap,
   });
 
-  final String plantName;
-  final bool isHealthy;
+  final String cropName;
+  final String diagnosisLabel;
   final String timeLabel;
-}
-
-class _RecentDiagnosisCard extends StatelessWidget {
-  const _RecentDiagnosisCard({required this.item});
-
-  final _RecentDiagnosisItem item;
+  final bool isHealthy;
+  final String imageUrl;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final statusLabel = item.isHealthy ? 'Healthy' : 'Diseased';
-    final statusColor = item.isHealthy
+    final statusColor = isHealthy
         ? MuzhirColors.forestGreen
         : MuzhirColors.infectionSeriousOrange;
+    final url = imageUrl.trim();
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: MuzhirColors.cardWhite,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: MuzhirColors.titleCharcoal.withValues(alpha: 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              width: 52,
-              height: 52,
-              color: MuzhirColors.weatherIconCircle.withValues(alpha: 0.65),
-              child: Icon(
-                Icons.local_florist_rounded,
-                color: MuzhirColors.forestGreen.withValues(alpha: 0.85),
-                size: 28,
+        child: Ink(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: MuzhirColors.cardWhite,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: MuzhirColors.titleCharcoal.withValues(alpha: 0.05),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
               ),
-            ),
+            ],
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.plantName,
-                  style: GoogleFonts.lexend(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: MuzhirColors.titleCharcoal,
-                  ),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(
+                  width: 52,
+                  height: 52,
+                  child: url.isEmpty
+                      ? ColoredBox(
+                          color: MuzhirColors.weatherIconCircle
+                              .withValues(alpha: 0.65),
+                          child: Icon(
+                            Icons.local_florist_rounded,
+                            color: MuzhirColors.forestGreen.withValues(alpha: 0.85),
+                            size: 28,
+                          ),
+                        )
+                      : CachedNetworkImage(
+                          imageUrl: url,
+                          fit: BoxFit.cover,
+                          placeholder: (_, __) => ColoredBox(
+                            color: MuzhirColors.weatherIconCircle
+                                .withValues(alpha: 0.5),
+                            child: Center(
+                              child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: MuzhirColors.forestGreen
+                                      .withValues(alpha: 0.7),
+                                ),
+                              ),
+                            ),
+                          ),
+                          errorWidget: (_, __, ___) => ColoredBox(
+                            color: MuzhirColors.weatherIconCircle
+                                .withValues(alpha: 0.65),
+                            child: Icon(
+                              Icons.local_florist_rounded,
+                              color: MuzhirColors.forestGreen.withValues(alpha: 0.85),
+                              size: 28,
+                            ),
+                          ),
+                        ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  statusLabel,
-                  style: GoogleFonts.lexend(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: statusColor,
-                  ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      cropName,
+                      style: GoogleFonts.lexend(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: MuzhirColors.titleCharcoal,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      diagnosisLabel,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.lexend(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: statusColor,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      timeLabel,
+                      style: GoogleFonts.lexend(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: MuzhirColors.mutedGrey,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  item.timeLabel,
-                  style: GoogleFonts.lexend(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: MuzhirColors.mutedGrey,
-                  ),
-                ),
-              ],
-            ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: MuzhirColors.mutedGrey,
+                size: 22,
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

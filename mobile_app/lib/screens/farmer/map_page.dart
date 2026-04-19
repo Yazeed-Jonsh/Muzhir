@@ -1,110 +1,32 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:muzhir/core/api/api_service.dart';
+import 'package:muzhir/models/diagnosis_response.dart';
+import 'package:muzhir/screens/farmer/diagnosis_result_detail_screen.dart';
 import 'package:muzhir/theme/app_theme.dart';
-import 'package:muzhir/widgets/map_marker_card.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-// ── Fake field reports (Jeddah) — replace with Firestore later ─────────────
+/// One chip in the map crop filter row ([cropId] is the backend `crop` query; null = all crops).
+class _MapCropTab {
+  const _MapCropTab({required this.label, this.cropId});
 
-/// Healthy vs diseased scan status for map mock data.
-enum _MockReportStatus { healthy, diseased }
-
-/// One map pin’s backing data before Firebase (matches intended Firestore shape).
-class _MockMapReport {
-  const _MockMapReport({
-    required this.id,
-    required this.position,
-    required this.plantName,
-    required this.status,
-    required this.timestamp,
-  });
-
-  final String id;
-  final LatLng position;
-  final String plantName;
-  final _MockReportStatus status;
-  final DateTime timestamp;
+  final String label;
+  final String? cropId;
 }
 
-/// Parcel / sector labels for bottom sheet (keyed by [_MockMapReport.id]).
-const Map<String, String> _mockReportLocationTitles = {
-  'jed-001': 'Al-Hamra',
-  'jed-002': 'Al-Shati',
-  'jed-003': 'Al-Rawdah',
-  'jed-004': 'Obhur',
-  'jed-005': 'Al-Balad',
-};
-
-/// Disease diagnosis label when status is diseased (keyed by report id).
-const Map<String, String> _mockReportDiseaseLabels = {
-  'jed-001': 'Early Blight',
-  'jed-003': 'Leaf Rust',
-  'jed-005': 'Powdery Mildew',
-};
-
-String _statusLineForReport(_MockMapReport r) {
-  if (r.status == _MockReportStatus.healthy) return 'Healthy';
-  return _mockReportDiseaseLabels[r.id] ?? 'Diseased';
-}
-
-String _relativeTime(DateTime past) {
-  final d = DateTime.now().difference(past);
-  if (d.inSeconds < 60) return 'Just now';
-  if (d.inMinutes < 60) return '${d.inMinutes} min ago';
-  if (d.inHours < 24) {
-    final h = d.inHours;
-    return h == 1 ? '1 hour ago' : '$h hours ago';
-  }
-  if (d.inDays < 7) {
-    final days = d.inDays;
-    return days == 1 ? 'Yesterday' : '$days days ago';
-  }
-  if (d.inDays < 30) return '${d.inDays ~/ 7} weeks ago';
-  return '${d.inDays ~/ 30} months ago';
-}
-
-/// Five synthetic field reports in Jeddah (mock data until Firestore).
-final List<_MockMapReport> _mockReports = [
-  _MockMapReport(
-    id: 'jed-001',
-    position: const LatLng(21.5160, 39.1650),
-    plantName: 'Tomato',
-    status: _MockReportStatus.diseased,
-    timestamp: DateTime.now().subtract(const Duration(hours: 2)),
-  ),
-  _MockMapReport(
-    id: 'jed-002',
-    position: const LatLng(21.5850, 39.1200),
-    plantName: 'Date palm',
-    status: _MockReportStatus.healthy,
-    timestamp: DateTime.now().subtract(const Duration(days: 1)),
-  ),
-  _MockMapReport(
-    id: 'jed-003',
-    position: const LatLng(21.5580, 39.1680),
-    plantName: 'Wheat',
-    status: _MockReportStatus.diseased,
-    timestamp: DateTime.now().subtract(const Duration(days: 3)),
-  ),
-  _MockMapReport(
-    id: 'jed-004',
-    position: const LatLng(21.7100, 39.1250),
-    plantName: 'Date palm',
-    status: _MockReportStatus.healthy,
-    timestamp: DateTime.now().subtract(const Duration(minutes: 45)),
-  ),
-  _MockMapReport(
-    id: 'jed-005',
-    position: const LatLng(21.4850, 39.1850),
-    plantName: 'Grapes',
-    status: _MockReportStatus.diseased,
-    timestamp: DateTime.now().subtract(const Duration(hours: 18)),
-  ),
+const List<_MapCropTab> _kMapCropTabs = <_MapCropTab>[
+  _MapCropTab(label: 'All', cropId: null),
+  _MapCropTab(label: 'Tomato', cropId: 'tomato'),
+  _MapCropTab(label: 'Corn', cropId: 'corn'),
+  _MapCropTab(label: 'Wheat', cropId: 'wheat'),
 ];
 
 /// Farmer Disease Map Page.
-/// Displays an OpenStreetMap view with markers for disease/health status
+/// Displays an OpenStreetMap view with markers from [ApiService.getMapMarkers]
 /// and the user's current position when available.
 class MapPage extends StatefulWidget {
   const MapPage({super.key, this.isTabVisible = false});
@@ -129,10 +51,16 @@ class _MapPageState extends State<MapPage> {
   bool _locationLoading = false;
   bool _didAutoCenterOnUser = false;
 
+  List<DiagnosisResponse> _scanMarkers = [];
+  bool _markersLoading = true;
+  String? _markersError;
+  int _selectedCropTabIndex = 0;
+
   @override
   void initState() {
     super.initState();
     _mapController = MapController();
+    _loadMapMarkers();
     if (widget.isTabVisible) {
       _refreshUserLocation(autoCenterOnFirstFix: true);
     }
@@ -150,6 +78,102 @@ class _MapPageState extends State<MapPage> {
   void dispose() {
     _mapController.dispose();
     super.dispose();
+  }
+
+  /// Pin color: green when healthy, red when diseased (design spec).
+  Color _getMarkerColor(bool isHealthy) {
+    return isHealthy ? MuzhirColors.coreLeafGreen : MuzhirColors.earthyClayRed;
+  }
+
+  Future<void> _loadMapMarkers() async {
+    if (!mounted) return;
+    final crop = _kMapCropTabs[_selectedCropTabIndex].cropId;
+    setState(() {
+      _markersLoading = true;
+      _markersError = null;
+      _scanMarkers = [];
+    });
+    try {
+      final list = await ApiService().getMapMarkers(crop: crop);
+      if (!mounted) return;
+      setState(() {
+        _scanMarkers = list;
+        _markersLoading = false;
+      });
+      _fitAllMarkersVisible();
+    } on DioException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _markersLoading = false;
+        _markersError = _messageFromDio(e);
+        _scanMarkers = [];
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _markersLoading = false;
+        _markersError = e.toString();
+        _scanMarkers = [];
+      });
+    }
+  }
+
+  String _messageFromDio(DioException e) {
+    final data = e.response?.data;
+    if (data is Map && data['detail'] != null) {
+      final d = data['detail'];
+      if (d is String) return d;
+      if (d is List && d.isNotEmpty) return d.first.toString();
+    }
+    return e.message ?? 'Could not load map markers.';
+  }
+
+  void _onCropTabSelected(int index) {
+    if (index == _selectedCropTabIndex) return;
+    setState(() => _selectedCropTabIndex = index);
+    _loadMapMarkers();
+  }
+
+  Widget _buildCropFilterBar() {
+    return Material(
+      color: MuzhirColors.creamScaffold,
+      elevation: 1,
+      shadowColor: MuzhirColors.deepCharcoal.withValues(alpha: 0.08),
+      child: SizedBox(
+        height: 52,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          itemCount: _kMapCropTabs.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 8),
+          itemBuilder: (context, i) {
+            final tab = _kMapCropTabs[i];
+            final selected = i == _selectedCropTabIndex;
+            return ChoiceChip(
+              label: Text(tab.label),
+              selected: selected,
+              showCheckmark: false,
+              onSelected: (value) {
+                if (value) _onCropTabSelected(i);
+              },
+              selectedColor: MuzhirColors.forestGreen,
+              backgroundColor: MuzhirColors.cardWhite,
+              side: BorderSide(
+                color: selected
+                    ? MuzhirColors.forestGreen
+                    : MuzhirColors.deepCharcoal.withValues(alpha: 0.12),
+              ),
+              labelStyle: TextStyle(
+                color: selected ? MuzhirColors.cardWhite : MuzhirColors.titleCharcoal,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+            );
+          },
+        ),
+      ),
+    );
   }
 
   Future<void> _refreshUserLocation({bool autoCenterOnFirstFix = false}) async {
@@ -226,11 +250,14 @@ class _MapPageState extends State<MapPage> {
     _animateMapTo(_userLocation!, zoom: _userLocationZoom);
   }
 
-  /// Fits the five mock Jeddah report pins in view (with padding for FAB / chrome).
+  /// Fits all scan pins in view (with padding for FAB / chrome).
   void _fitAllMarkersVisible() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final points = _mockReports.map((r) => r.position).toList();
+      final points = _scanMarkers
+          .where((d) => d.latitude != null && d.longitude != null)
+          .map((d) => LatLng(d.latitude!, d.longitude!))
+          .toList();
       if (points.isEmpty) return;
       try {
         if (points.length == 1) {
@@ -249,18 +276,85 @@ class _MapPageState extends State<MapPage> {
     });
   }
 
-  void _showReportSheet(_MockMapReport report) {
-    showModalBottomSheet(
+  DiagnosisResponse? _markerSummaryForScanId(String scanId) {
+    for (final m in _scanMarkers) {
+      if (m.scanId == scanId) return m;
+    }
+    return null;
+  }
+
+  String _formatMarkerTimestamp(DateTime? t) {
+    if (t == null) return '—';
+    final d = t.toLocal();
+    final mm = d.minute.toString().padLeft(2, '0');
+    final hh = d.hour.toString().padLeft(2, '0');
+    return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')} $hh:$mm';
+  }
+
+  Future<void> _openWalkingDirections(double lat, double lon) async {
+    final geo = Uri.parse('geo:$lat,$lon?q=$lat,$lon');
+    try {
+      if (await canLaunchUrl(geo)) {
+        await launchUrl(geo, mode: LaunchMode.externalApplication);
+        return;
+      }
+    } catch (_) {}
+    final googleMaps = Uri.parse(
+      'https://www.google.com/maps/dir/?api=1&destination=$lat,$lon&travelmode=walking',
+    );
+    try {
+      await launchUrl(googleMaps, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not open maps.',
+            style: GoogleFonts.lexend(fontWeight: FontWeight.w600),
+          ),
+        ),
+      );
+    }
+  }
+
+  void _onMarkerTapped(String scanId) {
+    final summary = _markerSummaryForScanId(scanId);
+    if (summary == null) return;
+
+    final navigator = Navigator.of(context);
+    final lat = summary.latitude;
+    final lon = summary.longitude;
+    final cropLabel =
+        summary.cropType.isNotEmpty ? summary.cropType : 'Crop';
+
+    showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (context) {
-        return MapMarkerCard(
-          locationName: _mockReportLocationTitles[report.id] ?? report.id,
-          cropType: report.plantName,
-          diseaseName: _statusLineForReport(report),
-          timeAgo: _relativeTime(report.timestamp),
-          isHealthy: report.status == _MockReportStatus.healthy,
+      builder: (sheetContext) {
+        return _MapScanDetailSheet(
+          summary: summary,
+          coordinateLine: lat != null && lon != null
+              ? '${lat.toStringAsFixed(5)}, ${lon.toStringAsFixed(5)}'
+              : '—',
+          timestampLine: _formatMarkerTimestamp(summary.scannedAt),
+          onViewDetails: () {
+            Navigator.of(sheetContext).pop();
+            navigator.push<void>(
+              MaterialPageRoute<void>(
+                builder: (_) => DiagnosisResultDetailScreen(
+                  scanId: scanId,
+                  cropType: cropLabel,
+                ),
+              ),
+            );
+          },
+          onNavigate: lat != null && lon != null
+              ? () {
+                  Navigator.of(sheetContext).pop();
+                  _openWalkingDirections(lat, lon);
+                }
+              : null,
         );
       },
     );
@@ -271,8 +365,37 @@ class _MapPageState extends State<MapPage> {
     final scheme = Theme.of(context).colorScheme;
     final mapBlue = Theme.of(context).extension<MuzhirFeatureColors>()!.mapUserLocationBlue;
 
+    final markerWidgets = _scanMarkers
+        .where((d) => d.latitude != null && d.longitude != null)
+        .map((d) {
+      final point = LatLng(d.latitude!, d.longitude!);
+      final healthy = d.diagnosis.isHealthy;
+      return Marker(
+        point: point,
+        width: 48,
+        height: 48,
+        alignment: Alignment.topCenter,
+        child: GestureDetector(
+          onTap: () => _onMarkerTapped(d.scanId),
+          child: Icon(
+            Icons.location_on_rounded,
+            size: 44,
+            color: _getMarkerColor(healthy),
+            shadows: [
+              Shadow(
+                color: Colors.black.withValues(alpha: 0.35),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+        ),
+      );
+    }).toList();
+
     return Column(
       children: [
+        _buildCropFilterBar(),
         Expanded(
           child: Stack(
             children: [
@@ -291,34 +414,7 @@ class _MapPageState extends State<MapPage> {
                     urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                     userAgentPackageName: 'com.example.muzhir',
                   ),
-                  MarkerLayer(
-                    markers: _mockReports.map((report) {
-                      final markerColor = report.status == _MockReportStatus.healthy
-                          ? MuzhirColors.darkOliveGreen
-                          : MuzhirColors.earthyClayRed;
-                      return Marker(
-                        point: report.position,
-                        width: 48,
-                        height: 48,
-                        alignment: Alignment.topCenter,
-                        child: GestureDetector(
-                          onTap: () => _showReportSheet(report),
-                          child: Icon(
-                            Icons.location_on_rounded,
-                            size: 44,
-                            color: markerColor,
-                            shadows: [
-                              Shadow(
-                                color: Colors.black.withValues(alpha: 0.35),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
+                  MarkerLayer(markers: markerWidgets),
                   if (_userLocation != null)
                     MarkerLayer(
                       markers: [
@@ -343,21 +439,16 @@ class _MapPageState extends State<MapPage> {
                   ),
                 ],
               ),
-              if (_locationLoading)
-                Positioned(
-                  top: 12,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: Material(
-                      elevation: 3,
-                      color: Theme.of(context).cardTheme.color ?? scheme.surface,
-                      borderRadius: BorderRadius.circular(24),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
+              Positioned(
+                top: 12,
+                left: 12,
+                right: 12,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (_markersLoading)
+                      _MapOverlayBanner(
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -370,19 +461,76 @@ class _MapPageState extends State<MapPage> {
                               ),
                             ),
                             const SizedBox(width: 12),
-                            Text(
-                              'Finding your location…',
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: scheme.onSurface,
-                                    fontWeight: FontWeight.w500,
-                                  ),
+                            Flexible(
+                              child: Text(
+                                'Loading field scans…',
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                      color: scheme.onSurface,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                              ),
                             ),
                           ],
                         ),
                       ),
-                    ),
-                  ),
+                    if (!_markersLoading && _markersError != null) ...[
+                      _MapOverlayBanner(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _markersError!,
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: scheme.onSurface,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                            ),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: _loadMapMarkers,
+                                child: const Text('Retry'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    if (_locationLoading)
+                      Padding(
+                        padding: EdgeInsets.only(
+                          top: (_markersLoading || _markersError != null) ? 8 : 0,
+                        ),
+                        child: _MapOverlayBanner(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  color: scheme.primary,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Flexible(
+                                child: Text(
+                                  'Finding your location…',
+                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                        color: scheme.onSurface,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
+              ),
               Positioned(
                 right: 16,
                 bottom: 56,
@@ -392,7 +540,7 @@ class _MapPageState extends State<MapPage> {
                   children: [
                     FloatingActionButton(
                       heroTag: 'map_fit_all_markers',
-                      onPressed: _fitAllMarkersVisible,
+                      onPressed: markerWidgets.isEmpty ? null : _fitAllMarkersVisible,
                       tooltip: 'Show all markers',
                       child: const Icon(Icons.zoom_out_map),
                     ),
@@ -410,6 +558,184 @@ class _MapPageState extends State<MapPage> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Bottom sheet for a tapped map pin: summary fields + view details + external maps.
+class _MapScanDetailSheet extends StatelessWidget {
+  const _MapScanDetailSheet({
+    required this.summary,
+    required this.coordinateLine,
+    required this.timestampLine,
+    required this.onViewDetails,
+    this.onNavigate,
+  });
+
+  final DiagnosisResponse summary;
+  final String coordinateLine;
+  final String timestampLine;
+  final VoidCallback onViewDetails;
+  final VoidCallback? onNavigate;
+
+  @override
+  Widget build(BuildContext context) {
+    final isHealthy = summary.diagnosis.isHealthy;
+    final statusColor =
+        isHealthy ? MuzhirColors.coreLeafGreen : MuzhirColors.earthyClayRed;
+    final statusText = isHealthy ? 'Healthy' : 'Unhealthy';
+
+    return SafeArea(
+      child: Container(
+        width: double.infinity,
+        decoration: const BoxDecoration(
+          color: MuzhirColors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: MuzhirColors.mutedGrey.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Text(
+                'Scan details',
+                style: GoogleFonts.lexend(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: MuzhirColors.titleCharcoal,
+                ),
+              ),
+              const SizedBox(height: 20),
+              _MapDetailRow(
+                label: 'Health status',
+                value: statusText,
+                valueColor: statusColor,
+              ),
+              const SizedBox(height: 14),
+              _MapDetailRow(
+                label: 'Crop type',
+                value: summary.cropType.isNotEmpty ? summary.cropType : '—',
+              ),
+              const SizedBox(height: 14),
+              _MapDetailRow(
+                label: 'Timestamp',
+                value: timestampLine,
+              ),
+              const SizedBox(height: 14),
+              _MapDetailRow(
+                label: 'Coordinates',
+                value: coordinateLine,
+              ),
+              const SizedBox(height: 28),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: FilledButton(
+                  onPressed: onViewDetails,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: MuzhirColors.forestGreen,
+                    foregroundColor: MuzhirColors.cardWhite,
+                  ),
+                  child: Text(
+                    'View details',
+                    style: GoogleFonts.lexend(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: OutlinedButton.icon(
+                  onPressed: onNavigate,
+                  icon: const Icon(Icons.directions_walk_rounded),
+                  label: Text(
+                    'Navigate',
+                    style: GoogleFonts.lexend(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MapDetailRow extends StatelessWidget {
+  const _MapDetailRow({
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
+
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.lexend(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: MuzhirColors.mutedGrey,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: GoogleFonts.lexend(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: valueColor ?? MuzhirColors.titleCharcoal,
+            height: 1.35,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MapOverlayBanner extends StatelessWidget {
+  const _MapOverlayBanner({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      elevation: 3,
+      color: Theme.of(context).cardTheme.color ?? scheme.surface,
+      borderRadius: BorderRadius.circular(24),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: child,
+      ),
     );
   }
 }

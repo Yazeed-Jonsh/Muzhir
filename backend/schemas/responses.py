@@ -50,6 +50,50 @@ class ScanSummary(BaseModel):
         description="Cloudinary image URL for the scan thumbnail/preview.",
         examples=["https://res.cloudinary.com/demo/image/upload/v1/muzhir/scans/scan_123.jpg"],
     )
+    disease_name: Optional[str] = Field(
+        default=None,
+        alias="diseaseName",
+        description="English disease label from diagnosis when available (same as diagnose label).",
+        examples=["Early blight"],
+    )
+
+
+class MapMarkerItem(BaseModel):
+    """One geolocated scan for the map view (coordinates required)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    scan_id: str = Field(
+        alias="scanId",
+        description="Scan identifier.",
+        examples=["a1b2c3d4e5f6789012345678abcdef"],
+    )
+    latitude: float = Field(
+        ge=-90.0,
+        le=90.0,
+        description="Capture latitude (WGS84).",
+        examples=[21.516],
+    )
+    longitude: float = Field(
+        ge=-180.0,
+        le=180.0,
+        description="Capture longitude (WGS84).",
+        examples=[39.165],
+    )
+    crop_type: str = Field(
+        alias="cropType",
+        description="Crop label for the pin (English display name when available).",
+        examples=["Tomato"],
+    )
+    is_healthy: bool = Field(
+        alias="isHealthy",
+        description="Whether the stored diagnosis marks the plant as healthy.",
+        examples=[False],
+    )
+    created_at: datetime = Field(
+        alias="createdAt",
+        description="When the scan was recorded (from Firestore).",
+    )
 
 
 class RecommendationBlock(BaseModel):
@@ -193,6 +237,14 @@ class DiagnoseUploadResponse(BaseModel):
     )
     recommendation: "DiagnoseRecommendationBlock" = Field(
         description="Recommendation text prepared for UI button display.",
+    )
+    latitude: float | None = Field(
+        default=None,
+        description="GPS latitude from the client at capture time, if provided.",
+    )
+    longitude: float | None = Field(
+        default=None,
+        description="GPS longitude from the client at capture time, if provided.",
     )
 
 

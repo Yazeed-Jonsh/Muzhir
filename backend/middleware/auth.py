@@ -6,6 +6,8 @@ from fastapi import HTTPException, Request, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from firebase_admin import auth
 
+from backend.core.firebase_config import ensure_firebase_initialized
+
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
@@ -14,6 +16,8 @@ def verify_token(
     credentials: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
 ) -> str:
     """Validate Firebase bearer token and return the authenticated user id."""
+    ensure_firebase_initialized()
+
     if credentials is None or credentials.scheme.lower() != "bearer" or not credentials.credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -24,6 +28,7 @@ def verify_token(
     try:
         decoded_token = auth.verify_id_token(credentials.credentials)
     except Exception as exc:
+        print(f"Firebase Auth Error: {exc}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired authorization token.",

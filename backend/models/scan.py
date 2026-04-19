@@ -116,6 +116,14 @@ class ScanModel(BaseModel):
         description="Optional GPS point where the image was captured.",
         examples=[{"latitude": 24.7136, "longitude": 46.6753}],
     )
+    latitude: float | None = Field(
+        default=None,
+        description="Capture latitude when the mobile client sends coordinates.",
+    )
+    longitude: float | None = Field(
+        default=None,
+        description="Capture longitude when the mobile client sends coordinates.",
+    )
     batch: Optional[BatchModel] = Field(
         default=None,
         description="Optional batch grouping metadata.",

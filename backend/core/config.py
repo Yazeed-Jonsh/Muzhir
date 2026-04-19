@@ -10,7 +10,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 ROOT_DIR = Path(__file__).resolve().parents[2]
 BACKEND_DIR = ROOT_DIR / "backend"
 DEFAULT_FIREBASE_CREDENTIALS_PATH = (
-    Path(__file__).resolve().parents[1] / "config" / "serviceAccountKey.json"
+    Path(__file__).resolve().parents[1] / "config" / "service-account.json"
 )
 DEFAULT_YOLO_WEIGHTS_PATH = Path(__file__).resolve().parents[1] / "assets" / "best.pt"
 

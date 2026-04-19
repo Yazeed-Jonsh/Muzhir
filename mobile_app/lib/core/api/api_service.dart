@@ -2,8 +2,10 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:geolocator/geolocator.dart';
 
 import 'package:muzhir/models/diagnosis_response.dart';
+import 'package:muzhir/models/scan_history_item.dart';
 
 /// HTTP client for the Muzhir backend with Firebase Bearer auth and debug logging.
 class ApiService {
@@ -18,7 +20,7 @@ class ApiService {
       ),
     );
     _dio.interceptors.addAll([
-      _AuthInterceptor(_auth),
+      _AuthInterceptor(_auth, _dio),
       _LoggingInterceptor(),
     ]);
   }
@@ -53,10 +55,34 @@ class ApiService {
     String? cropId,
     String? growthStageId,
   }) async {
+    double? captureLatitude;
+    double? captureLongitude;
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (serviceEnabled) {
+        var permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.denied) {
+          permission = await Geolocator.requestPermission();
+        }
+        if (permission != LocationPermission.denied &&
+            permission != LocationPermission.deniedForever) {
+          final position = await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.high,
+            ),
+          );
+          captureLatitude = position.latitude;
+          captureLongitude = position.longitude;
+        }
+      }
+    } catch (_) {
+      // Omit coordinates when location is unavailable.
+    }
+
     final filename = imageFile.uri.pathSegments.isNotEmpty
         ? imageFile.uri.pathSegments.last
         : 'image.jpg';
-    final formData = FormData.fromMap({
+    final formMap = <String, dynamic>{
       'image': await MultipartFile.fromFile(
         imageFile.path,
         filename: filename,
@@ -64,7 +90,14 @@ class ApiService {
       'cropId': cropId?.trim() ?? '',
       'growthStageId': growthStageId?.trim() ?? '',
       'source': 'mobile',
-    });
+    };
+    if (captureLatitude != null) {
+      formMap['latitude'] = captureLatitude;
+    }
+    if (captureLongitude != null) {
+      formMap['longitude'] = captureLongitude;
+    }
+    final formData = FormData.fromMap(formMap);
 
     final response = await _dio.post<Map<String, dynamic>>(
       '/diagnose',
@@ -87,12 +120,101 @@ class ApiService {
 
     return DiagnosisResponse.fromJson(data);
   }
+
+  /// `GET /history` — returns the signed-in user's scans (same [_dio] + [_AuthInterceptor]).
+  ///
+  /// The API returns [ScanSummary] rows, not full [DiagnosisResponse] bodies; use
+  /// [ScanHistoryItem] for type-safe parsing.
+  Future<List<ScanHistoryItem>> getScanHistory({
+    int limit = 20,
+    String? cropId,
+  }) async {
+    final safeLimit = limit.clamp(1, 100);
+    final response = await _dio.get<dynamic>(
+      '/history',
+      queryParameters: <String, dynamic>{
+        'limit': safeLimit,
+        if (cropId != null && cropId.trim().isNotEmpty) 'cropId': cropId.trim(),
+      },
+    );
+
+    final data = response.data;
+    if (data is! List) {
+      throw FormatException(
+        'getScanHistory: expected JSON array, got ${data.runtimeType}',
+      );
+    }
+
+    return data.map((raw) {
+      if (raw is! Map) {
+        throw FormatException(
+          'getScanHistory: expected object in array, got ${raw.runtimeType}',
+        );
+      }
+      return ScanHistoryItem.fromJson(Map<String, dynamic>.from(raw));
+    }).toList();
+  }
+
+  /// `GET /map-markers` — scans with GPS for the map (same [_dio] + [_AuthInterceptor]).
+  ///
+  /// Optional [crop] filters by stored `cropId` (e.g. `tomato`, `corn`). Each item is parsed
+  /// with [DiagnosisResponse.fromMapMarkerJson] (minimal fields: scan id, coordinates,
+  /// [DiagnosisResponse.cropType], [DiagnosisSection.isHealthy]).
+  Future<List<DiagnosisResponse>> getMapMarkers({String? crop}) async {
+    final response = await _dio.get<dynamic>(
+      '/map-markers',
+      queryParameters: <String, dynamic>{
+        if (crop != null && crop.trim().isNotEmpty) 'crop': crop.trim(),
+      },
+    );
+
+    final data = response.data;
+    if (data is! List) {
+      throw FormatException(
+        'getMapMarkers: expected JSON array, got ${data.runtimeType}',
+      );
+    }
+
+    return data.map((raw) {
+      if (raw is! Map) {
+        throw FormatException(
+          'getMapMarkers: expected object in array, got ${raw.runtimeType}',
+        );
+      }
+      return DiagnosisResponse.fromMapMarkerJson(
+        Map<String, dynamic>.from(raw),
+      );
+    }).toList();
+  }
+
+  /// `GET /scan/{scanId}` — full scan document for the signed-in owner.
+  Future<DiagnosisResponse> getScanDiagnosis(String scanId) async {
+    final id = scanId.trim();
+    if (id.isEmpty) {
+      throw ArgumentError('scanId must not be empty');
+    }
+    final response = await _dio.get<Map<String, dynamic>>('/scan/$id');
+    final data = response.data;
+    if (data == null) {
+      throw DioException(
+        requestOptions: response.requestOptions,
+        response: response,
+        message: 'Scan response body was empty',
+        type: DioExceptionType.badResponse,
+      );
+    }
+    return DiagnosisResponse.fromScanDetailJson(id, data);
+  }
 }
 
 class _AuthInterceptor extends Interceptor {
-  _AuthInterceptor(this._auth);
+  _AuthInterceptor(this._auth, this._dio);
 
   final FirebaseAuth _auth;
+  final Dio _dio;
+
+  /// Prevents infinite 401 retry loops when a forced refresh still fails auth.
+  static const String _kExtra401Retried = '__muzhirAuth401Retried';
 
   @override
   Future<void> onRequest(
@@ -101,12 +223,59 @@ class _AuthInterceptor extends Interceptor {
   ) async {
     final user = _auth.currentUser;
     if (user != null) {
-      final token = await user.getIdToken();
-      if (token != null && token.isNotEmpty) {
-        options.headers['Authorization'] = 'Bearer $token';
+      try {
+        final token = await user.getIdToken(false);
+        if (token != null && token.isNotEmpty) {
+          options.headers['Authorization'] = 'Bearer $token';
+        }
+      } catch (_) {
+        // Token read failed; proceed without Bearer (caller may get 401).
       }
     }
+    print(
+      'DEBUG: Full Authorization Header: ${options.headers['Authorization']}',
+    );
     handler.next(options);
+  }
+
+  @override
+  Future<void> onError(
+    DioException err,
+    ErrorInterceptorHandler handler,
+  ) async {
+    final status = err.response?.statusCode;
+    final opts = err.requestOptions;
+
+    if (status != 401 || opts.extra[_kExtra401Retried] == true) {
+      handler.next(err);
+      return;
+    }
+
+    final user = _auth.currentUser;
+    if (user == null) {
+      handler.next(err);
+      return;
+    }
+
+    try {
+      final token = await user.getIdToken(true);
+      if (token == null || token.isEmpty) {
+        handler.next(err);
+        return;
+      }
+      opts.extra[_kExtra401Retried] = true;
+      opts.headers['Authorization'] = 'Bearer $token';
+      print(
+        'DEBUG: Full Authorization Header (after refresh): '
+        '${opts.headers['Authorization']}',
+      );
+      final response = await _dio.fetch(opts);
+      handler.resolve(response);
+    } on DioException catch (retryErr) {
+      handler.next(retryErr);
+    } catch (_) {
+      handler.next(err);
+    }
   }
 }
 
