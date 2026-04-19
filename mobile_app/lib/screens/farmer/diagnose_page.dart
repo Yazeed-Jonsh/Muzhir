@@ -20,10 +20,17 @@ enum _DiagnoseState { idle, preview, result }
 
 /// Farmer Diagnose Page — Natural Organic layout with forest header and capture card.
 class DiagnosePage extends StatefulWidget {
-  const DiagnosePage({super.key, this.onViewAllRecent});
+  const DiagnosePage({
+    super.key,
+    this.onViewAllRecent,
+    this.isTabVisible = false,
+    this.refreshSignal = 0,
+  });
 
   /// Switches main navigation to full history (e.g. History tab).
   final VoidCallback? onViewAllRecent;
+  final bool isTabVisible;
+  final int refreshSignal;
 
   @override
   State<DiagnosePage> createState() => _DiagnosePageState();
@@ -39,6 +46,7 @@ class _DiagnosePageState extends State<DiagnosePage> {
   final ImagePicker _picker = ImagePicker();
 
   List<ScanHistoryItem> _recentScans = [];
+  bool _recentRefreshing = false;
 
   static ScanSource _scanSourceFromImageSource(ImageSource source) {
     switch (source) {
@@ -54,13 +62,32 @@ class _DiagnosePageState extends State<DiagnosePage> {
     _fetchRecentScans();
   }
 
-  Future<void> _fetchRecentScans() async {
+  @override
+  void didUpdateWidget(covariant DiagnosePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final becameVisible = widget.isTabVisible && !oldWidget.isTabVisible;
+    final signalChanged = widget.refreshSignal != oldWidget.refreshSignal;
+    if (becameVisible || signalChanged) {
+      _fetchRecentScans(showRefreshing: true);
+    }
+  }
+
+  Future<void> _fetchRecentScans({bool showRefreshing = false}) async {
+    if (showRefreshing && mounted) {
+      setState(() => _recentRefreshing = true);
+    }
     try {
       final list = await ApiService().getScanHistory(limit: 3);
       if (!mounted) return;
-      setState(() => _recentScans = list);
+      setState(() {
+        _recentScans = list;
+        _recentRefreshing = false;
+      });
     } catch (_) {
       // Keep existing list on failure (e.g. offline); first load stays empty.
+      if (mounted && showRefreshing) {
+        setState(() => _recentRefreshing = false);
+      }
     }
   }
 
@@ -169,11 +196,29 @@ class _DiagnosePageState extends State<DiagnosePage> {
       final diagnosis = await ApiService().getScanDiagnosis(item.scanId);
       navigator.pop();
       if (!context.mounted) return;
-      await navigator.push<void>(
-        MaterialPageRoute<void>(
+      final deleted = await navigator.push<bool>(
+        MaterialPageRoute<bool>(
           builder: (_) => DiagnosisResultDetailScreen(
             diagnosis: diagnosis,
             cropType: item.cropName,
+          ),
+        ),
+      );
+      if (!context.mounted || deleted != true) return;
+      await _fetchRecentScans(showRefreshing: true);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          backgroundColor: MuzhirColors.forestGreen,
+          content: Text(
+            'Scan removed successfully',
+            style: GoogleFonts.lexend(
+              color: MuzhirColors.cardWhite,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       );
@@ -245,7 +290,7 @@ class _DiagnosePageState extends State<DiagnosePage> {
         _diagnosisResult = response;
         _state = _DiagnoseState.result;
       });
-      await _fetchRecentScans();
+      await _fetchRecentScans(showRefreshing: true);
     } on DioException catch (e) {
       if (!mounted) return;
       setState(() => _isAnalyzing = false);
@@ -845,6 +890,17 @@ class _DiagnosePageState extends State<DiagnosePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (_recentRefreshing)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              minHeight: 3,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                MuzhirColors.forestGreen.withValues(alpha: 0.95),
+              ),
+              backgroundColor: MuzhirColors.forestGreen.withValues(alpha: 0.18),
+            ),
+          ),
         const SizedBox(height: 8),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,

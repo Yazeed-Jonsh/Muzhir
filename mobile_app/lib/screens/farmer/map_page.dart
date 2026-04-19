@@ -317,6 +317,117 @@ class _MapPageState extends State<MapPage> {
     }
   }
 
+  Future<bool> _confirmDeleteScan() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(
+            'Delete scan',
+            style: GoogleFonts.lexend(fontWeight: FontWeight.w700),
+          ),
+          content: Text(
+            'Are you sure you want to delete this scan?',
+            style: GoogleFonts.lexend(fontWeight: FontWeight.w500),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(
+                'Cancel',
+                style: GoogleFonts.lexend(
+                  fontWeight: FontWeight.w600,
+                  color: MuzhirColors.mutedGrey,
+                ),
+              ),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: FilledButton.styleFrom(
+                backgroundColor: MuzhirColors.earthyClayRed,
+                foregroundColor: MuzhirColors.cardWhite,
+              ),
+              child: Text(
+                'Delete',
+                style: GoogleFonts.lexend(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+    return confirmed == true;
+  }
+
+  Future<void> _deleteMarkerFromMap({
+    required String scanId,
+    required BuildContext sheetContext,
+  }) async {
+    final shouldDelete = await _confirmDeleteScan();
+    if (!shouldDelete) return;
+
+    try {
+      await ApiService().deleteScan(scanId);
+    } on DioException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          backgroundColor: MuzhirColors.earthyClayRed,
+          content: Text(
+            _messageFromDio(e),
+            style: GoogleFonts.lexend(
+              color: MuzhirColors.cardWhite,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      );
+      return;
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          backgroundColor: MuzhirColors.earthyClayRed,
+          content: Text(
+            'Could not delete scan: $e',
+            style: GoogleFonts.lexend(
+              color: MuzhirColors.cardWhite,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (!mounted || !sheetContext.mounted) return;
+    Navigator.of(sheetContext).pop();
+    setState(() {
+      _scanMarkers.removeWhere((s) => s.scanId == scanId);
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        backgroundColor: MuzhirColors.forestGreen,
+        content: Text(
+          'Scan removed successfully',
+          style: GoogleFonts.lexend(
+            color: MuzhirColors.cardWhite,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
   void _onMarkerTapped(String scanId) {
     final summary = _markerSummaryForScanId(scanId);
     if (summary == null) return;
@@ -340,14 +451,34 @@ class _MapPageState extends State<MapPage> {
           timestampLine: _formatMarkerTimestamp(summary.scannedAt),
           onViewDetails: () {
             Navigator.of(sheetContext).pop();
-            navigator.push<void>(
-              MaterialPageRoute<void>(
+            navigator.push<bool>(
+              MaterialPageRoute<bool>(
                 builder: (_) => DiagnosisResultDetailScreen(
                   scanId: scanId,
                   cropType: cropLabel,
                 ),
               ),
-            );
+            ).then((deleted) {
+              if (!mounted || deleted != true) return;
+              setState(() {
+                _scanMarkers.removeWhere((s) => s.scanId == scanId);
+              });
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  behavior: SnackBarBehavior.floating,
+                  margin: const EdgeInsets.all(16),
+                  backgroundColor: MuzhirColors.forestGreen,
+                  content: Text(
+                    'Scan removed successfully',
+                    style: GoogleFonts.lexend(
+                      color: MuzhirColors.cardWhite,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              );
+            });
           },
           onNavigate: lat != null && lon != null
               ? () {
@@ -355,6 +486,10 @@ class _MapPageState extends State<MapPage> {
                   _openWalkingDirections(lat, lon);
                 }
               : null,
+          onDelete: () => _deleteMarkerFromMap(
+            scanId: scanId,
+            sheetContext: sheetContext,
+          ),
         );
       },
     );
@@ -570,6 +705,7 @@ class _MapScanDetailSheet extends StatelessWidget {
     required this.timestampLine,
     required this.onViewDetails,
     this.onNavigate,
+    required this.onDelete,
   });
 
   final DiagnosisResponse summary;
@@ -577,6 +713,7 @@ class _MapScanDetailSheet extends StatelessWidget {
   final String timestampLine;
   final VoidCallback onViewDetails;
   final VoidCallback? onNavigate;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -609,13 +746,25 @@ class _MapScanDetailSheet extends StatelessWidget {
                   ),
                 ),
               ),
-              Text(
-                'Scan details',
-                style: GoogleFonts.lexend(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: MuzhirColors.titleCharcoal,
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Scan details',
+                      style: GoogleFonts.lexend(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: MuzhirColors.titleCharcoal,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: onDelete,
+                    icon: const Icon(Icons.delete_outline),
+                    color: MuzhirColors.earthyClayRed,
+                    tooltip: 'Delete scan',
+                  ),
+                ],
               ),
               const SizedBox(height: 20),
               _MapDetailRow(

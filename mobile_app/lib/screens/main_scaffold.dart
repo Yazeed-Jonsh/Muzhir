@@ -20,6 +20,7 @@ class _MainScaffoldState extends State<MainScaffold> {
   static const double _floatingNavRadius = 30;
 
   int _currentIndex = 0;
+  int _diagnoseRefreshSignal = 0;
 
   static const List<String> _titles = [
     'Muzhir',
@@ -31,6 +32,15 @@ class _MainScaffoldState extends State<MainScaffold> {
   void _onTabTapped(int index) {
     setState(() {
       _currentIndex = index;
+      if (index == 1) {
+        _diagnoseRefreshSignal++;
+      }
+    });
+  }
+
+  void _notifyDiagnoseRefresh() {
+    setState(() {
+      _diagnoseRefreshSignal++;
     });
   }
 
@@ -85,9 +95,11 @@ class _MainScaffoldState extends State<MainScaffold> {
           const FarmerHomePage(),
           DiagnosePage(
             onViewAllRecent: () => setState(() => _currentIndex = 3),
+            isTabVisible: _currentIndex == 1,
+            refreshSignal: _diagnoseRefreshSignal,
           ),
           MapPage(isTabVisible: _currentIndex == 2),
-          const HistoryPage(),
+          HistoryPage(onScanDeleted: _notifyDiagnoseRefresh),
         ],
       ),
       bottomNavigationBar: Container(

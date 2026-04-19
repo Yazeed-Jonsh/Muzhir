@@ -17,6 +17,7 @@ class DiagnosisResultDetailScreen extends StatefulWidget {
     super.key,
     this.diagnosis,
     this.scanId,
+    this.onDeleted,
     required this.cropType,
     this.source = ScanSource.mobile,
   }) : assert(
@@ -26,6 +27,7 @@ class DiagnosisResultDetailScreen extends StatefulWidget {
 
   final DiagnosisResponse? diagnosis;
   final String? scanId;
+  final Future<void> Function()? onDeleted;
   final String cropType;
   final ScanSource source;
 
@@ -37,6 +39,7 @@ class DiagnosisResultDetailScreen extends StatefulWidget {
 class _DiagnosisResultDetailScreenState extends State<DiagnosisResultDetailScreen> {
   DiagnosisResponse? _resolved;
   bool _loading = false;
+  bool _deleting = false;
   String? _error;
 
   @override
@@ -88,17 +91,135 @@ class _DiagnosisResultDetailScreenState extends State<DiagnosisResultDetailScree
     return e.message ?? 'Could not load scan.';
   }
 
+  String? _activeScanId() {
+    final id = (widget.scanId ?? _resolved?.scanId ?? '').trim();
+    return id.isEmpty ? null : id;
+  }
+
+  Future<bool> _confirmDeleteScan() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(
+            'Delete scan',
+            style: GoogleFonts.lexend(fontWeight: FontWeight.w700),
+          ),
+          content: Text(
+            'Are you sure you want to delete this scan?',
+            style: GoogleFonts.lexend(fontWeight: FontWeight.w500),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(
+                'Cancel',
+                style: GoogleFonts.lexend(
+                  fontWeight: FontWeight.w600,
+                  color: MuzhirColors.mutedGrey,
+                ),
+              ),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: FilledButton.styleFrom(
+                backgroundColor: MuzhirColors.earthyClayRed,
+                foregroundColor: MuzhirColors.cardWhite,
+              ),
+              child: Text(
+                'Delete',
+                style: GoogleFonts.lexend(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+    return confirmed == true;
+  }
+
+  Future<void> _onDeletePressed() async {
+    final scanId = _activeScanId();
+    if (scanId == null || _deleting) return;
+    final confirmed = await _confirmDeleteScan();
+    if (!confirmed || !mounted) return;
+
+    setState(() => _deleting = true);
+    try {
+      await ApiService().deleteScan(scanId);
+      await widget.onDeleted?.call();
+    } on DioException catch (e) {
+      if (!mounted) return;
+      setState(() => _deleting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          backgroundColor: MuzhirColors.earthyClayRed,
+          content: Text(
+            _messageFromDio(e),
+            style: GoogleFonts.lexend(
+              color: MuzhirColors.cardWhite,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      );
+      return;
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _deleting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          backgroundColor: MuzhirColors.earthyClayRed,
+          content: Text(
+            'Could not delete scan: $e',
+            style: GoogleFonts.lexend(
+              color: MuzhirColors.cardWhite,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    Navigator.of(context).pop(true);
+  }
+
+  AppBar _buildAppBar() {
+    final canDelete = _activeScanId() != null;
+    return AppBar(
+      title: Text(
+        'Diagnosis',
+        style: GoogleFonts.lexend(fontWeight: FontWeight.w700),
+      ),
+      actions: [
+        IconButton(
+          onPressed: (canDelete && !_deleting) ? _onDeletePressed : null,
+          icon: _deleting
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.delete_outline),
+          color: MuzhirColors.earthyClayRed,
+          tooltip: 'Delete scan',
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
       return Scaffold(
         backgroundColor: MuzhirColors.creamScaffold,
-        appBar: AppBar(
-          title: Text(
-            'Diagnosis',
-            style: GoogleFonts.lexend(fontWeight: FontWeight.w700),
-          ),
-        ),
+        appBar: _buildAppBar(),
         body: const Center(
           child: CircularProgressIndicator(),
         ),
@@ -108,12 +229,7 @@ class _DiagnosisResultDetailScreenState extends State<DiagnosisResultDetailScree
     if (_error != null) {
       return Scaffold(
         backgroundColor: MuzhirColors.creamScaffold,
-        appBar: AppBar(
-          title: Text(
-            'Diagnosis',
-            style: GoogleFonts.lexend(fontWeight: FontWeight.w700),
-          ),
-        ),
+        appBar: _buildAppBar(),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
@@ -150,12 +266,7 @@ class _DiagnosisResultDetailScreenState extends State<DiagnosisResultDetailScree
     if (diagnosis == null) {
       return Scaffold(
         backgroundColor: MuzhirColors.creamScaffold,
-        appBar: AppBar(
-          title: Text(
-            'Diagnosis',
-            style: GoogleFonts.lexend(fontWeight: FontWeight.w700),
-          ),
-        ),
+        appBar: _buildAppBar(),
         body: const Center(child: Text('No diagnosis data.')),
       );
     }
@@ -168,12 +279,7 @@ class _DiagnosisResultDetailScreenState extends State<DiagnosisResultDetailScree
 
     return Scaffold(
       backgroundColor: MuzhirColors.creamScaffold,
-      appBar: AppBar(
-        title: Text(
-          'Diagnosis',
-          style: GoogleFonts.lexend(fontWeight: FontWeight.w700),
-        ),
-      ),
+      appBar: _buildAppBar(),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         children: [

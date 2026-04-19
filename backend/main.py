@@ -667,6 +667,8 @@ async def get_history(
 
     normalized_crop_id = cropId.strip() if cropId and cropId.strip() else None
 
+    fetch_limit = min(max(limit * 10, limit), 100)
+
     try:
         scans_query = get_firestore_client().collection("scans").where(
             "userId", "==", normalized_user_id
@@ -675,7 +677,7 @@ async def get_history(
             scans_query = scans_query.where("cropId", "==", normalized_crop_id)
         scans_query = scans_query.order_by(
             "createdAt", direction=firestore.Query.DESCENDING
-        ).limit(limit)
+        ).limit(fetch_limit)
         docs = list(scans_query.stream())
     except Exception as exc:
         raise HTTPException(
@@ -747,6 +749,8 @@ async def get_history(
                 disease_name=disease_name_value,
             )
         )
+        if len(history) >= limit:
+            break
 
     return history
 

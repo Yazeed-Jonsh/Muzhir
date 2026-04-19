@@ -205,6 +205,27 @@ class ApiService {
     }
     return DiagnosisResponse.fromScanDetailJson(id, data);
   }
+
+  /// `DELETE /scan/{scanId}` — soft delete for the signed-in owner.
+  ///
+  /// Uses the same authenticated [_dio] client, so [_AuthInterceptor] attaches
+  /// the Firebase Bearer token automatically.
+  Future<void> deleteScan(String scanId) async {
+    final id = scanId.trim();
+    if (id.isEmpty) {
+      throw ArgumentError('scanId must not be empty');
+    }
+    final response = await _dio.delete<void>('/scan/$id');
+    final code = response.statusCode;
+    if (code == null || code < 200 || code >= 300) {
+      throw DioException(
+        requestOptions: response.requestOptions,
+        response: response,
+        message: 'Delete scan failed (status=$code)',
+        type: DioExceptionType.badResponse,
+      );
+    }
+  }
 }
 
 class _AuthInterceptor extends Interceptor {

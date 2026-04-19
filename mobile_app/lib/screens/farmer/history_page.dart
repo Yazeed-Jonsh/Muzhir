@@ -9,7 +9,9 @@ import 'package:muzhir/theme/app_theme.dart';
 
 /// Scan history backed by `GET /api/v1/history` (authenticated user only).
 class HistoryPage extends StatefulWidget {
-  const HistoryPage({super.key});
+  const HistoryPage({super.key, this.onScanDeleted});
+
+  final VoidCallback? onScanDeleted;
 
   @override
   State<HistoryPage> createState() => _HistoryPageState();
@@ -88,6 +90,118 @@ class _HistoryPageState extends State<HistoryPage> {
     return e.message ?? 'Could not load scan details.';
   }
 
+  Future<bool> _confirmDeleteScan(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(
+            'Delete scan',
+            style: GoogleFonts.lexend(fontWeight: FontWeight.w700),
+          ),
+          content: Text(
+            'Are you sure you want to delete this scan?',
+            style: GoogleFonts.lexend(fontWeight: FontWeight.w500),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(
+                'Cancel',
+                style: GoogleFonts.lexend(
+                  fontWeight: FontWeight.w600,
+                  color: MuzhirColors.mutedGrey,
+                ),
+              ),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: FilledButton.styleFrom(
+                backgroundColor: MuzhirColors.earthyClayRed,
+                foregroundColor: MuzhirColors.cardWhite,
+              ),
+              child: Text(
+                'Delete',
+                style: GoogleFonts.lexend(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+    return confirmed == true;
+  }
+
+  Future<bool> _deleteScanFromHistory(
+    BuildContext context,
+    ScanHistoryItem item,
+  ) async {
+    final shouldDelete = await _confirmDeleteScan(context);
+    if (!shouldDelete) return false;
+
+    try {
+      await ApiService().deleteScan(item.scanId);
+    } on DioException catch (e) {
+      if (!context.mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          backgroundColor: MuzhirColors.earthyClayRed,
+          content: Text(
+            _messageFromDioException(e),
+            style: GoogleFonts.lexend(
+              color: MuzhirColors.cardWhite,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      );
+      return false;
+    } catch (e) {
+      if (!context.mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          backgroundColor: MuzhirColors.earthyClayRed,
+          content: Text(
+            'Could not delete scan: $e',
+            style: GoogleFonts.lexend(
+              color: MuzhirColors.cardWhite,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      );
+      return false;
+    }
+
+    if (!context.mounted) return false;
+    setState(() {
+      _items.removeWhere((s) => s.scanId == item.scanId);
+    });
+    widget.onScanDeleted?.call();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        backgroundColor: MuzhirColors.forestGreen,
+        content: Text(
+          'Scan removed successfully',
+          style: GoogleFonts.lexend(
+            color: MuzhirColors.cardWhite,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+    return true;
+  }
+
   Future<void> _openDiagnosisDetail(
     BuildContext context,
     ScanHistoryItem item,
@@ -107,11 +221,31 @@ class _HistoryPageState extends State<HistoryPage> {
       final diagnosis = await ApiService().getScanDiagnosis(item.scanId);
       navigator.pop();
       if (!context.mounted) return;
-      await navigator.push<void>(
-        MaterialPageRoute<void>(
+      final deleted = await navigator.push<bool>(
+        MaterialPageRoute<bool>(
           builder: (_) => DiagnosisResultDetailScreen(
             diagnosis: diagnosis,
             cropType: item.cropName,
+          ),
+        ),
+      );
+      if (!context.mounted || deleted != true) return;
+      setState(() {
+        _items.removeWhere((s) => s.scanId == item.scanId);
+      });
+      widget.onScanDeleted?.call();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          backgroundColor: MuzhirColors.forestGreen,
+          content: Text(
+            'Scan removed successfully',
+            style: GoogleFonts.lexend(
+              color: MuzhirColors.cardWhite,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       );
@@ -185,12 +319,31 @@ class _HistoryPageState extends State<HistoryPage> {
                           final label = _diagnosisLabel(item);
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 16),
-                            child: _HistoryListTile(
-                              item: item,
-                              diagnosisLabel: label,
-                              timeLabel: _relativeTimestamp(item.createdAt),
-                              isHealthy: _isHealthyLabel(label),
-                              onTap: () => _openDiagnosisDetail(context, item),
+                            child: Dismissible(
+                              key: ValueKey<String>(item.scanId),
+                              direction: DismissDirection.endToStart,
+                              background: Container(
+                                decoration: BoxDecoration(
+                                  color: MuzhirColors.earthyClayRed,
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.symmetric(horizontal: 22),
+                                child: const Icon(
+                                  Icons.delete_rounded,
+                                  color: Colors.white,
+                                  size: 28,
+                                ),
+                              ),
+                              confirmDismiss: (_) =>
+                                  _deleteScanFromHistory(context, item),
+                              child: _HistoryListTile(
+                                item: item,
+                                diagnosisLabel: label,
+                                timeLabel: _relativeTimestamp(item.createdAt),
+                                isHealthy: _isHealthyLabel(label),
+                                onTap: () => _openDiagnosisDetail(context, item),
+                              ),
                             ),
                           );
                         },
