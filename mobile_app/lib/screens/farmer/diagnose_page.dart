@@ -4,12 +4,17 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dio/dio.dart';
 import 'package:dotted_border/dotted_border.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:muzhir/core/api/api_service.dart';
 import 'package:muzhir/models/diagnosis_response.dart';
+import 'package:muzhir/models/disease_detection.dart';
 import 'package:muzhir/models/scan_history_item.dart';
+import 'package:muzhir/providers/connectivity_provider.dart';
 import 'package:muzhir/screens/farmer/diagnosis_result_detail_screen.dart';
+import 'package:muzhir/services/inference_service.dart';
 import 'package:muzhir/theme/app_theme.dart';
 import 'package:muzhir/widgets/crop_type_dropdown.dart';
 import 'package:muzhir/widgets/diagnosis_result_card.dart';
@@ -19,7 +24,7 @@ import 'package:muzhir/widgets/treatment_advice_dialog.dart';
 enum _DiagnoseState { idle, preview, result }
 
 /// Farmer Diagnose Page — Natural Organic layout with forest header and capture card.
-class DiagnosePage extends StatefulWidget {
+class DiagnosePage extends ConsumerStatefulWidget {
   const DiagnosePage({
     super.key,
     this.onViewAllRecent,
@@ -33,10 +38,10 @@ class DiagnosePage extends StatefulWidget {
   final int refreshSignal;
 
   @override
-  State<DiagnosePage> createState() => _DiagnosePageState();
+  ConsumerState<DiagnosePage> createState() => _DiagnosePageState();
 }
 
-class _DiagnosePageState extends State<DiagnosePage> {
+class _DiagnosePageState extends ConsumerState<DiagnosePage> {
   _DiagnoseState _state = _DiagnoseState.idle;
   ScanSource _selectedSource = ScanSource.mobile;
   String? _selectedCrop;
@@ -47,6 +52,17 @@ class _DiagnosePageState extends State<DiagnosePage> {
 
   List<ScanHistoryItem> _recentScans = [];
   bool _recentRefreshing = false;
+
+  double? _diagnosisLatitude;
+  double? _diagnosisLongitude;
+
+  // ── On-device inference state ─────────────────────────────────────────────
+  /// Detections from the on-device YOLO26n model (null when not yet run or
+  /// after reset).
+  OnDeviceResult? _onDeviceResult;
+
+  /// True when the last analysis used on-device inference (offline fallback).
+  bool _isOfflineMode = false;
 
   static ScanSource _scanSourceFromImageSource(ImageSource source) {
     switch (source) {
@@ -122,9 +138,60 @@ class _DiagnosePageState extends State<DiagnosePage> {
         l.contains('no disease detected');
   }
 
+  Future<void> _getCurrentLocation() async {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      if (mounted) {
+        setState(() {
+          _diagnosisLatitude = null;
+          _diagnosisLongitude = null;
+        });
+      }
+      return;
+    }
+
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      if (mounted) {
+        setState(() {
+          _diagnosisLatitude = null;
+          _diagnosisLongitude = null;
+        });
+      }
+      return;
+    }
+
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+      if (mounted) {
+        setState(() {
+          _diagnosisLatitude = position.latitude;
+          _diagnosisLongitude = position.longitude;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _diagnosisLatitude = null;
+          _diagnosisLongitude = null;
+        });
+      }
+    }
+  }
+
   Future<void> _pickImage(ImageSource source) async {
     final XFile? pickedFile = await _picker.pickImage(source: source);
     if (pickedFile != null && mounted) {
+      await _getCurrentLocation();
+      if (!mounted) return;
       setState(() {
         _selectedImage = File(pickedFile.path);
         _selectedSource = _scanSourceFromImageSource(source);
@@ -138,6 +205,8 @@ class _DiagnosePageState extends State<DiagnosePage> {
     final XFile? pickedFile =
         await _picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null && mounted) {
+      await _getCurrentLocation();
+      if (!mounted) return;
       setState(() {
         _selectedImage = File(pickedFile.path);
         _selectedSource = ScanSource.drone;
@@ -154,6 +223,10 @@ class _DiagnosePageState extends State<DiagnosePage> {
       _selectedImage = null;
       _isAnalyzing = false;
       _diagnosisResult = null;
+      _onDeviceResult = null;
+      _isOfflineMode = false;
+      _diagnosisLatitude = null;
+      _diagnosisLongitude = null;
     });
   }
 
@@ -276,8 +349,41 @@ class _DiagnosePageState extends State<DiagnosePage> {
     setState(() {
       _isAnalyzing = true;
       _diagnosisResult = null;
+      _onDeviceResult = null;
+      _isOfflineMode = false;
     });
 
+    // Read connectivity once — no streaming subscription needed here.
+    final isOffline = ref.read(isOfflineProvider).value ?? false;
+
+    if (isOffline) {
+      await _analyzeOnDevice();
+    } else {
+      await _analyzeRemote();
+    }
+  }
+
+  /// On-device inference path (offline / YOLO26n).
+  Future<void> _analyzeOnDevice() async {
+    try {
+      final result =
+          await InferenceService.instance.runInference(_selectedImage!);
+      if (!mounted) return;
+      setState(() {
+        _isAnalyzing = false;
+        _isOfflineMode = true;
+        _onDeviceResult = result;
+        _state = _DiagnoseState.result;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isAnalyzing = false);
+      _showErrorSnackBar('On-device analysis failed: $e');
+    }
+  }
+
+  /// Remote API inference path (online).
+  Future<void> _analyzeRemote() async {
     try {
       final response = await ApiService().uploadImageForDiagnosis(
         _selectedImage!,
@@ -294,41 +400,30 @@ class _DiagnosePageState extends State<DiagnosePage> {
     } on DioException catch (e) {
       if (!mounted) return;
       setState(() => _isAnalyzing = false);
-      final message = _messageFromDioException(e);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
-          backgroundColor: MuzhirColors.earthyClayRed,
-          content: Text(
-            message,
-            style: GoogleFonts.lexend(
-              color: MuzhirColors.cardWhite,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      );
+      _showErrorSnackBar(_messageFromDioException(e));
     } catch (e) {
       if (!mounted) return;
       setState(() => _isAnalyzing = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
-          backgroundColor: MuzhirColors.earthyClayRed,
-          content: Text(
-            'Analysis failed: $e',
-            style: GoogleFonts.lexend(
-              color: MuzhirColors.cardWhite,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
+      _showErrorSnackBar('Analysis failed: $e');
+    }
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        backgroundColor: MuzhirColors.earthyClayRed,
+        content: Text(
+          message,
+          style: GoogleFonts.lexend(
+            color: MuzhirColors.cardWhite,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
           ),
         ),
-      );
-    }
+      ),
+    );
   }
 
   void _onScanAnother() {
@@ -338,6 +433,10 @@ class _DiagnosePageState extends State<DiagnosePage> {
       _selectedImage = null;
       _isAnalyzing = false;
       _diagnosisResult = null;
+      _onDeviceResult = null;
+      _isOfflineMode = false;
+      _diagnosisLatitude = null;
+      _diagnosisLongitude = null;
     });
   }
 
@@ -636,6 +735,7 @@ class _DiagnosePageState extends State<DiagnosePage> {
   }
 
   Widget _buildImagePreviewInsideCard(BuildContext context) {
+    final detections = _onDeviceResult?.detections ?? [];
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
       child: Stack(
@@ -648,6 +748,16 @@ class _DiagnosePageState extends State<DiagnosePage> {
               fit: BoxFit.cover,
             ),
           ),
+          // Bounding box overlay — only shown after on-device inference.
+          if (detections.isNotEmpty)
+            Positioned.fill(
+              child: AspectRatio(
+                aspectRatio: 4 / 3,
+                child: CustomPaint(
+                  painter: _BoundingBoxPainter(detections),
+                ),
+              ),
+            ),
           if (_state == _DiagnoseState.preview)
             Positioned(
               top: 10,
@@ -811,10 +921,16 @@ class _DiagnosePageState extends State<DiagnosePage> {
   }
 
   Widget _buildResultSection(BuildContext context) {
+    return _isOfflineMode
+        ? _buildOfflineResultSection(context)
+        : _buildOnlineResultSection(context);
+  }
+
+  // ── Online result (remote API) ─────────────────────────────────────────────
+
+  Widget _buildOnlineResultSection(BuildContext context) {
     final d = _diagnosisResult;
-    if (d == null) {
-      return const SizedBox.shrink();
-    }
+    if (d == null) return const SizedBox.shrink();
 
     final confidencePct =
         (d.diagnosis.confidence * 100).round().clamp(0, 100);
@@ -883,6 +999,261 @@ class _DiagnosePageState extends State<DiagnosePage> {
           ),
         ),
       ],
+    );
+  }
+
+  // ── Offline result (on-device YOLO26n) ────────────────────────────────────
+
+  Widget _buildOfflineResultSection(BuildContext context) {
+    final result = _onDeviceResult;
+    final detections = result?.detections ?? [];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildOfflineBadge(result),
+        const SizedBox(height: 12),
+        if (detections.isEmpty)
+          _buildNoDetectionCard()
+        else ...[
+          DiagnosisResultCard(
+            cropType: _selectedCrop ?? 'Tomato',
+            diseaseName: detections.first.labelEn,
+            confidencePercent: detections.first.confidencePercent,
+            source: _selectedSource,
+            isHealthy: detections.first.isHealthy,
+            latitude: _diagnosisLatitude,
+            longitude: _diagnosisLongitude,
+          ),
+          if (detections.length > 1) ...[
+            const SizedBox(height: 10),
+            _buildSecondaryDetections(detections.skip(1).take(2).toList()),
+          ],
+        ],
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: OutlinedButton.icon(
+            onPressed: () => _showOfflineLimitationDialog(context),
+            icon: const Icon(Icons.wifi_off_rounded),
+            label: const Text('Connect for AI Treatment Advice'),
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: TextButton.icon(
+            onPressed: _onScanAnother,
+            icon: const Icon(Icons.refresh_rounded),
+            label: Text(
+              'Scan Another',
+              style: GoogleFonts.lexend(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: MuzhirColors.forestGreen,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOfflineBadge(OnDeviceResult? result) {
+    final msLabel = result != null
+        ? ' · ${result.inferenceMs.toStringAsFixed(0)} ms'
+        : '';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: MuzhirColors.infectionSeriousOrange.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: MuzhirColors.infectionSeriousOrange.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.offline_bolt_rounded,
+            size: 16,
+            color: MuzhirColors.infectionSeriousOrange,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Offline · On-device YOLO26n$msLabel',
+              style: GoogleFonts.lexend(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: MuzhirColors.infectionSeriousOrange,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoDetectionCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: MuzhirColors.weatherIconCircle.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.check_circle_outline_rounded,
+            color: MuzhirColors.forestGreen,
+            size: 32,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'No disease detected',
+                  style: GoogleFonts.lexend(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: MuzhirColors.forestGreen,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'The plant appears healthy — or try a clearer, '
+                  'closer image for a better result.',
+                  style: GoogleFonts.lexend(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w400,
+                    color: MuzhirColors.mutedGrey,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSecondaryDetections(List<DiseaseDetection> others) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'OTHER DETECTIONS',
+          style: GoogleFonts.lexend(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.5,
+            color: MuzhirColors.mutedGrey.withValues(alpha: 0.75),
+          ),
+        ),
+        const SizedBox(height: 6),
+        ...others.map(
+          (d) => Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: MuzhirColors.cardWhite,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color:
+                        MuzhirColors.titleCharcoal.withValues(alpha: 0.04),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: d.isHealthy
+                          ? MuzhirColors.forestGreen
+                          : MuzhirColors.infectionSeriousOrange,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      d.labelEn,
+                      style: GoogleFonts.lexend(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: MuzhirColors.titleCharcoal,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${d.confidencePercent}%',
+                    style: GoogleFonts.lexend(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: MuzhirColors.mutedGrey,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showOfflineLimitationDialog(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: Text(
+          'Connect to the internet',
+          style: GoogleFonts.lexend(
+            fontWeight: FontWeight.w700,
+            color: MuzhirColors.titleCharcoal,
+          ),
+        ),
+        content: Text(
+          'AI-powered treatment recommendations require an active connection '
+          'to the Muzhir backend. Reconnect and tap "Analyze Plant" again to '
+          'get personalised Arabic & English treatment advice.',
+          style: GoogleFonts.lexend(
+            fontSize: 14,
+            fontWeight: FontWeight.w400,
+            color: MuzhirColors.mutedGrey,
+            height: 1.5,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(
+              'OK',
+              style: GoogleFonts.lexend(
+                fontWeight: FontWeight.w600,
+                color: MuzhirColors.forestGreen,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1160,6 +1531,88 @@ class _QuickCaptureChip extends StatelessWidget {
       ),
     );
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bounding box overlay
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Draws coloured bounding boxes and confidence labels from on-device
+/// detections over the image preview widget.
+///
+/// Bounding box coordinates from [ultralytics_yolo] are normalised to [0, 1]
+/// relative to the original image dimensions and are mapped to the rendered
+/// widget size here.
+class _BoundingBoxPainter extends CustomPainter {
+  const _BoundingBoxPainter(this.detections);
+
+  final List<DiseaseDetection> detections;
+
+  static const double _strokeWidth = 2.5;
+  static const double _labelHeight = 20.0;
+  static const double _fontSize = 11.0;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (final det in detections) {
+      final color =
+          det.isHealthy ? MuzhirColors.forestGreen : MuzhirColors.earthyClayRed;
+
+      final rect = Rect.fromLTWH(
+        det.boundingBox.left * size.width,
+        det.boundingBox.top * size.height,
+        det.boundingBox.width * size.width,
+        det.boundingBox.height * size.height,
+      );
+
+      // Box stroke
+      canvas.drawRect(
+        rect,
+        Paint()
+          ..color = color.withValues(alpha: 0.9)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = _strokeWidth,
+      );
+
+      // Label background
+      final label = '${det.labelEn}  ${det.confidencePercent}%';
+      final tp = TextPainter(
+        text: TextSpan(
+          text: label,
+          style: const TextStyle(
+            color: Color(0xFFFFFFFF),
+            fontSize: _fontSize,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: size.width);
+
+      final bgLeft = rect.left;
+      final bgTop = (rect.top - _labelHeight).clamp(0.0, size.height);
+      final bgWidth = (tp.width + 12).clamp(0.0, size.width - bgLeft);
+
+      canvas.drawRRect(
+        RRect.fromLTRBR(
+          bgLeft,
+          bgTop,
+          bgLeft + bgWidth,
+          bgTop + _labelHeight,
+          const Radius.circular(4),
+        ),
+        Paint()..color = color,
+      );
+
+      tp.paint(
+        canvas,
+        Offset(bgLeft + 6, bgTop + (_labelHeight - tp.height) / 2),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_BoundingBoxPainter old) =>
+      old.detections != detections;
 }
 
 /// Quadcopter silhouette with leaf badge — reads as crop-spraying / field drone.

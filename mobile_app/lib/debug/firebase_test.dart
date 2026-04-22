@@ -15,13 +15,15 @@ import '../firebase_options.dart';
 /// 3. Prints success (doc_id) or specific Firebase error
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(FirebaseHealthCheckApp());
+  runApp(const FirebaseHealthCheckApp());
 }
 
 class FirebaseHealthCheckApp extends StatelessWidget {
+  const FirebaseHealthCheckApp({super.key});
+
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return const MaterialApp(
       title: 'Firebase Health Check',
       home: FirebaseHealthCheckScreen(),
     );
@@ -29,6 +31,8 @@ class FirebaseHealthCheckApp extends StatelessWidget {
 }
 
 class FirebaseHealthCheckScreen extends StatefulWidget {
+  const FirebaseHealthCheckScreen({super.key});
+
   @override
   State<FirebaseHealthCheckScreen> createState() =>
       _FirebaseHealthCheckScreenState();

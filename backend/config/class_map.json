@@ -1,10 +1,10 @@
 {
-  "0": { "en": "Healthy", "ar": "سليم" },
-  "1": { "en": "Bacterial Wilt", "ar": "الذبول البكتيري" },
-  "2": { "en": "Early Blight", "ar": "لفحة مبكرة" },
-  "3": { "en": "Powdery Mildew", "ar": "البياض الدقيقي" },
-  "4": { "en": "Downy Mildew", "ar": "البياض الزغبي" },
-  "5": { "en": "Leaf Spot", "ar": "تبقع الأوراق" },
-  "6": { "en": "Rust", "ar": "صدأ" },
-  "7": { "en": "Tomato_Mildiou", "ar": "ميلديو الطماطم" }
+  "0": { "en": "Corn Blight", "ar": "لفحة الذرة" },
+  "1": { "en": "Corn Brown Spots", "ar": "بقع الذرة البنية" },
+  "2": { "en": "Corn Streak", "ar": "تخطط الذرة" },
+  "3": { "en": "Corn Stripe", "ar": "توشح الذرة" },
+  "4": { "en": "Corn Yellowing", "ar": "اصفرار الذرة" },
+  "5": { "en": "Tomato Brown Spots", "ar": "بقع الطماطم البنية" },
+  "6": { "en": "Tomato Leaf Curling", "ar": "تجعد أوراق الطماطم" },
+  "7": { "en": "Tomato Mildiou", "ar": "البياض الزغبي" }
 }

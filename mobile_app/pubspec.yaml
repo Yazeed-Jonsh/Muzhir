@@ -27,6 +27,8 @@ dependencies:
   cached_network_image: ^3.4.1
   dio: ^5.9.2
   url_launcher: ^6.3.1
+  # ── On-Device Inference ────────────────────────────────────────────────
+  ultralytics_yolo: ^0.3.0
 
 dev_dependencies:
   flutter_test:
@@ -38,4 +40,15 @@ flutter:
   assets:
     - assets/icons/
     - assets/logos/
-  
+    # ── ML Models ──────────────────────────────────────────────────────────
+    # Android: TFLite weights (fp16 for GPU/NNAPI delegate, int8 for CPU fallback)
+    - assets/models/muzhir_fp16.tflite
+    - assets/models/muzhir_int8.tflite
+    # iOS: CoreML .mlpackage bundle (directory structure must be preserved)
+    # NOTE: also drag-drop into Xcode ios/Runner.xcworkspace → Runner target for ANE
+    - assets/models/muzhir_ios_coreml.mlpackage/Manifest.json
+    - assets/models/muzhir_ios_coreml.mlpackage/Data/com.apple.CoreML/model.mlmodel
+    - assets/models/muzhir_ios_coreml.mlpackage/Data/com.apple.CoreML/weights/weight.bin
+    # Label map shared by backend and on-device inference
+    - assets/models/class_map.json
+

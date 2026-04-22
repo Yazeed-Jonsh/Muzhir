@@ -54,6 +54,12 @@
 @import sqflite_darwin;
 #endif
 
+#if __has_include(<ultralytics_yolo/YOLOPlugin.h>)
+#import <ultralytics_yolo/YOLOPlugin.h>
+#else
+@import ultralytics_yolo;
+#endif
+
 #if __has_include(<url_launcher_ios/URLLauncherPlugin.h>)
 #import <url_launcher_ios/URLLauncherPlugin.h>
 #else
@@ -71,6 +77,7 @@
   [FLTImagePickerPlugin registerWithRegistrar:[registry registrarForPlugin:@"FLTImagePickerPlugin"]];
   [FPPPackageInfoPlusPlugin registerWithRegistrar:[registry registrarForPlugin:@"FPPPackageInfoPlusPlugin"]];
   [SqflitePlugin registerWithRegistrar:[registry registrarForPlugin:@"SqflitePlugin"]];
+  [YOLOPlugin registerWithRegistrar:[registry registrarForPlugin:@"YOLOPlugin"]];
   [URLLauncherPlugin registerWithRegistrar:[registry registrarForPlugin:@"URLLauncherPlugin"]];
 }
 

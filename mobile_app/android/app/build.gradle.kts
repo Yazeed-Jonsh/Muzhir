@@ -27,10 +27,17 @@ android {
         applicationId = "com.example.muzhir"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        minSdk = 24          // ultralytics_yolo + LiteRT require API 24+; NNAPI requires 27+
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        ndk {
+            // Ship only the two dominant ABIs to keep APK size down.
+            // arm64-v8a  → modern Android phones (NPU/GPU delegate)
+            // x86_64     → emulators (CI / debug)
+            abiFilters += listOf("arm64-v8a", "x86_64")
+        }
     }
 
     buildTypes {

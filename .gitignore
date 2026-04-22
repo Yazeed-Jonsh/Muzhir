@@ -62,6 +62,13 @@ mobile_app/firebase.json
 
 backend/assets/best.pt
 
+# Backend: duplicate exports of mobile YOLO artifacts (canonical files live under
+# mobile_app/assets/models/ and android/app/src/main/assets/). Keep
+# backend/config/class_map.json — not ignored here.
+backend/assets/muzhir_*.tflite
+backend/assets/muzhir_ios_coreml.zip
+backend/assets/muzhir_ios_coreml/
+
 # Python bytecode (never commit)
 **/__pycache__/
 *.py[cod]

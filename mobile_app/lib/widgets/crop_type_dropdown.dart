@@ -30,9 +30,10 @@ class CropTypeDropdown extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          value: value,
-          onChanged: onChanged,
+        // Use InputDecorator + DropdownButton (not DropdownButtonFormField) so
+        // we keep a true controlled `value` on each rebuild. The FormField
+        // `value` -> `initialValue` migration would break parent-driven updates.
+        InputDecorator(
           decoration: InputDecoration(
             filled: true,
             fillColor: MuzhirColors.white,
@@ -62,24 +63,34 @@ class CropTypeDropdown extends StatelessWidget {
               color: MuzhirColors.coreLeafGreen,
             ),
           ),
-          icon: const Icon(
-            Icons.keyboard_arrow_down_rounded,
-            color: MuzhirColors.coreLeafGreen,
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              isExpanded: true,
+              value: value,
+              icon: const Icon(
+                Icons.keyboard_arrow_down_rounded,
+                color: MuzhirColors.coreLeafGreen,
+              ),
+              menuMaxHeight: 240,
+              dropdownColor: MuzhirColors.white,
+              style: Theme.of(context).textTheme.bodyLarge,
+              hint: Text(
+                'Select crop type',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: MuzhirColors.deepCharcoal.withValues(alpha: 0.4),
+                    ),
+              ),
+              items: _cropTypes
+                  .map(
+                    (crop) => DropdownMenuItem(
+                      value: crop,
+                      child: Text(crop),
+                    ),
+                  )
+                  .toList(),
+              onChanged: onChanged,
+            ),
           ),
-          dropdownColor: MuzhirColors.white,
-          style: Theme.of(context).textTheme.bodyLarge,
-          hint: Text(
-            'Select crop type',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: MuzhirColors.deepCharcoal.withValues(alpha: 0.4),
-                ),
-          ),
-          items: _cropTypes
-              .map((crop) => DropdownMenuItem(
-                    value: crop,
-                    child: Text(crop),
-                  ))
-              .toList(),
         ),
       ],
     );
