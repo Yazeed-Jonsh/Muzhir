@@ -1,3 +1,5 @@
+import 'package:muzhir/core/utils/network_url_helper.dart';
+
 /// Response payload for a scan diagnosis from the Muzhir API.
 class DiagnosisResponse {
   const DiagnosisResponse({
@@ -38,7 +40,9 @@ class DiagnosisResponse {
     }
     return DiagnosisResponse(
       scanId: _string(json['scanId'] ?? json['scan_id']),
-      imageUrl: _string(json['imageUrl'] ?? json['image_url']),
+      imageUrl: NetworkUrlHelper.normalizeRemoteUrl(
+        _string(json['imageUrl'] ?? json['image_url']),
+      ),
       diagnosis: DiagnosisSection.fromJson(diagnosisRaw),
       recommendation: RecommendationSection.fromJson(recommendationRaw),
       latitude: _optionalDouble(json['latitude'] ?? json['captureLatitude']),
@@ -152,7 +156,7 @@ class DiagnosisResponse {
 
     return DiagnosisResponse(
       scanId: scanId,
-      imageUrl: imageUrl,
+      imageUrl: NetworkUrlHelper.normalizeRemoteUrl(imageUrl),
       diagnosis: DiagnosisSection(
         label: label,
         confidence: confidence.clamp(0.0, 1.0),

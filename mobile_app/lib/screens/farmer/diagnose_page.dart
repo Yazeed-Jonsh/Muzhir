@@ -8,7 +8,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:muzhir/core/api/api_service.dart';
+import 'package:muzhir/core/utils/network_url_helper.dart';
+import 'package:muzhir/core/utils/translation_helper.dart';
+import 'package:muzhir/l10n/app_localizations.dart';
 import 'package:muzhir/models/diagnosis_response.dart';
 import 'package:muzhir/models/disease_detection.dart';
 import 'package:muzhir/models/scan_history_item.dart';
@@ -19,7 +23,7 @@ import 'package:muzhir/theme/app_theme.dart';
 import 'package:muzhir/widgets/crop_type_dropdown.dart';
 import 'package:muzhir/widgets/diagnosis_result_card.dart';
 import 'package:muzhir/widgets/recent_scan_tile.dart';
-import 'package:muzhir/widgets/treatment_advice_dialog.dart';
+import 'package:muzhir/widgets/treatment_recommendation_modal.dart';
 
 enum _DiagnoseState { idle, preview, result }
 
@@ -107,28 +111,25 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
     }
   }
 
-  String _recentDiagnosisLabel(ScanHistoryItem item) {
+  String _recentDiagnosisLabel(ScanHistoryItem item, AppLocalizations l10n) {
     final name = item.diseaseName?.trim();
     if (name != null && name.isNotEmpty) return name;
     if (item.status == 'pending' || item.status == 'processing') {
-      return 'Analysis in progress';
+      return l10n.analysisInProgress;
     }
-    return 'No diagnosis yet';
+    return l10n.noDiagnosisYet;
   }
 
-  String _recentRelativeTime(DateTime t) {
+  String _recentRelativeTime(DateTime t, AppLocalizations l10n) {
     final now = DateTime.now();
     final d = now.difference(t);
-    if (d.isNegative) return 'Just now';
-    if (d.inSeconds < 45) return 'Just now';
-    if (d.inMinutes < 60) return '${d.inMinutes} min ago';
-    if (d.inHours < 24) return '${d.inHours} hours ago';
-    if (d.inDays < 7) return '${d.inDays} days ago';
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    return '${months[t.month - 1]} ${t.day}, ${t.year}';
+    if (d.isNegative || d.inSeconds < 45) return l10n.justNow;
+    if (d.inMinutes < 60) return l10n.minutesAgo(d.inMinutes);
+    if (d.inHours < 24) return l10n.hoursAgo(d.inHours);
+    if (d.inDays < 7) return l10n.daysAgo(d.inDays);
+    return DateFormat.yMMMd(
+      Localizations.localeOf(context).toLanguageTag(),
+    ).format(t);
   }
 
   bool _recentLooksHealthy(String label) {
@@ -230,24 +231,24 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
     });
   }
 
-  String _messageFromDioException(DioException e) {
+  String _messageFromDioException(DioException e, AppLocalizations l10n) {
     final data = e.response?.data;
     if (data is Map && data['detail'] != null) {
       final d = data['detail'];
       if (d is String) return d;
       if (d is List && d.isNotEmpty) return d.first.toString();
     }
-    return e.message ?? 'Could not analyze image. Please try again.';
+    return e.message ?? l10n.analysisFailed('unknown error');
   }
 
-  String _messageFromDioScanDetail(DioException e) {
+  String _messageFromDioScanDetail(DioException e, AppLocalizations l10n) {
     final data = e.response?.data;
     if (data is Map && data['detail'] != null) {
       final d = data['detail'];
       if (d is String) return d;
       if (d is List && d.isNotEmpty) return d.first.toString();
     }
-    return e.message ?? 'Could not load scan details.';
+    return e.message ?? l10n.couldNotLoadScan;
   }
 
   Future<void> _openDiagnosisDetail(
@@ -255,6 +256,8 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
     ScanHistoryItem item,
   ) async {
     final navigator = Navigator.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final isAr = Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -273,7 +276,7 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
         MaterialPageRoute<bool>(
           builder: (_) => DiagnosisResultDetailScreen(
             diagnosis: diagnosis,
-            cropType: item.cropName,
+            cropType: isAr ? item.cropNameAr : item.cropName,
           ),
         ),
       );
@@ -283,10 +286,10 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
+          margin: const EdgeInsetsDirectional.all(16),
           backgroundColor: MuzhirColors.forestGreen,
           content: Text(
-            'Scan removed successfully',
+            l10n.scanRemovedSuccessfully,
             style: GoogleFonts.lexend(
               color: MuzhirColors.cardWhite,
               fontSize: 14,
@@ -301,10 +304,10 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(16),
+            margin: const EdgeInsetsDirectional.all(16),
             backgroundColor: MuzhirColors.earthyClayRed,
             content: Text(
-              _messageFromDioScanDetail(e),
+              _messageFromDioScanDetail(e, l10n),
               style: GoogleFonts.lexend(
                 color: MuzhirColors.cardWhite,
                 fontSize: 14,
@@ -320,10 +323,10 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(16),
+            margin: const EdgeInsetsDirectional.all(16),
             backgroundColor: MuzhirColors.earthyClayRed,
             content: Text(
-              'Could not open scan: $e',
+              l10n.couldNotOpenScan(e.toString()),
               style: GoogleFonts.lexend(
                 color: MuzhirColors.cardWhite,
                 fontSize: 14,
@@ -344,6 +347,7 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
   }
 
   Future<void> _onAnalyze() async {
+    final l10n = AppLocalizations.of(context)!;
     if (_selectedCrop == null || _selectedImage == null) return;
 
     setState(() {
@@ -384,6 +388,7 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
 
   /// Remote API inference path (online).
   Future<void> _analyzeRemote() async {
+    final l10n = AppLocalizations.of(context)!;
     try {
       final response = await ApiService().uploadImageForDiagnosis(
         _selectedImage!,
@@ -400,11 +405,11 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
     } on DioException catch (e) {
       if (!mounted) return;
       setState(() => _isAnalyzing = false);
-      _showErrorSnackBar(_messageFromDioException(e));
+      _showErrorSnackBar(_messageFromDioException(e, l10n));
     } catch (e) {
       if (!mounted) return;
       setState(() => _isAnalyzing = false);
-      _showErrorSnackBar('Analysis failed: $e');
+      _showErrorSnackBar(l10n.analysisFailed(e.toString()));
     }
   }
 
@@ -412,7 +417,7 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(16),
+        margin: const EdgeInsetsDirectional.all(16),
         backgroundColor: MuzhirColors.earthyClayRed,
         content: Text(
           message,
@@ -440,23 +445,21 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
     });
   }
 
-  void _showTreatmentAdviceDialog(BuildContext context) {
-    final d = _diagnosisResult;
-    if (d == null) return;
-    presentTreatmentAdviceDialog(context, d);
-  }
-
   void _showCaptureSheet() {
+    final l10n = AppLocalizations.of(context)!;
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: MuzhirColors.cardWhite,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadiusDirectional.only(
+          topStart: Radius.circular(20),
+          topEnd: Radius.circular(20),
+        ),
       ),
       builder: (ctx) {
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            padding: const EdgeInsetsDirectional.symmetric(vertical: 8),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -464,7 +467,7 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
                   leading: const Icon(Icons.camera_alt_rounded,
                       color: MuzhirColors.forestGreen),
                   title: Text(
-                    'Camera',
+                    l10n.camera,
                     style: GoogleFonts.lexend(fontWeight: FontWeight.w600),
                   ),
                   onTap: () {
@@ -476,7 +479,7 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
                   leading: const Icon(Icons.photo_library_rounded,
                       color: MuzhirColors.forestGreen),
                   title: Text(
-                    'Gallery',
+                    l10n.gallery,
                     style: GoogleFonts.lexend(fontWeight: FontWeight.w600),
                   ),
                   onTap: () {
@@ -505,7 +508,7 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
         slivers: [
           SliverToBoxAdapter(child: _buildHeader(context)),
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+            padding: const EdgeInsetsDirectional.fromSTEB(16, 20, 16, 0),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
                 _buildCaptureCard(context),
@@ -534,24 +537,25 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
   }
 
   Widget _buildHeader(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     const headerBottomRadius = Radius.circular(30);
     return Stack(
       clipBehavior: Clip.none,
       children: [
         ClipRRect(
-          borderRadius: const BorderRadius.only(
-            bottomLeft: headerBottomRadius,
-            bottomRight: headerBottomRadius,
+          borderRadius: const BorderRadiusDirectional.only(
+            bottomStart: headerBottomRadius,
+            bottomEnd: headerBottomRadius,
           ),
           child: Container(
             width: double.infinity,
             color: MuzhirColors.forestGreen,
-            padding: const EdgeInsets.fromLTRB(20, 12, 88, 22),
+            padding: const EdgeInsetsDirectional.fromSTEB(20, 12, 88, 22),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Diagnose Your Plant',
+                  l10n.diagnoseYourPlant,
                   style: GoogleFonts.lexend(
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
@@ -561,7 +565,7 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Upload or capture a plant image to detect diseases using our advanced AI botanical analysis engine.',
+                  l10n.diagnoseHeaderDescription,
                   style: GoogleFonts.lexend(
                     fontSize: 14,
                     fontWeight: FontWeight.w400,
@@ -573,8 +577,8 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
             ),
           ),
         ),
-        const Positioned(
-          right: 4,
+        const PositionedDirectional(
+          end: 4,
           bottom: -8,
           child: IgnorePointer(
             child: Opacity(
@@ -611,7 +615,7 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
           ),
         ],
       ),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsetsDirectional.all(14),
       child: _hasImage
           ? _buildImagePreviewInsideCard(context)
           : _buildEmptyCaptureCardBody(context),
@@ -620,6 +624,7 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
 
   /// Dotted upload target, file hint, and lighting tip (idle only).
   Widget _buildEmptyCaptureCardBody(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -658,9 +663,9 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
                     ),
                     const SizedBox(height: 14),
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      padding: const EdgeInsetsDirectional.symmetric(horizontal: 12),
                       child: Text(
-                        'Tap to upload or capture image',
+                        l10n.tapToUploadOrCaptureImage,
                         textAlign: TextAlign.center,
                         style: GoogleFonts.lexend(
                           fontSize: 15,
@@ -671,7 +676,7 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Supports JPG, PNG up to 10MB',
+                      l10n.supportsJpgPng,
                       textAlign: TextAlign.center,
                       style: GoogleFonts.lexend(
                         fontSize: 12,
@@ -691,16 +696,17 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
   }
 
   Widget _buildCaptureTipRow() {
+    final l10n = AppLocalizations.of(context)!;
     const tipGreen = MuzhirColors.forestGreen;
     return Padding(
-      padding: const EdgeInsets.only(top: 14, left: 2, right: 2),
+      padding: const EdgeInsetsDirectional.only(top: 14, start: 2, end: 2),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: 18,
             height: 18,
-            alignment: Alignment.center,
+            alignment: AlignmentDirectional.center,
             decoration: BoxDecoration(
               color: tipGreen.withValues(alpha: 0.12),
               shape: BoxShape.circle,
@@ -719,7 +725,7 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Ensure the leaf is clear and well-lit for best results',
+              l10n.captureTip,
               style: GoogleFonts.lexend(
                 fontSize: 12,
                 fontWeight: FontWeight.w400,
@@ -759,13 +765,13 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
               ),
             ),
           if (_state == _DiagnoseState.preview)
-            Positioned(
+            PositionedDirectional(
               top: 10,
-              right: 10,
+              end: 10,
               child: GestureDetector(
                 onTap: _onRemoveImage,
                 child: Container(
-                  padding: const EdgeInsets.all(6),
+                  padding: const EdgeInsetsDirectional.all(6),
                   decoration: BoxDecoration(
                     color: MuzhirColors.titleCharcoal.withValues(alpha: 0.72),
                     shape: BoxShape.circle,
@@ -784,11 +790,12 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
   }
 
   Widget _buildQuickCaptureRow(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'QUICK CAPTURE',
+          l10n.quickCapture,
           style: GoogleFonts.lexend(
             fontSize: 11,
             fontWeight: FontWeight.w600,
@@ -801,7 +808,7 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
           children: [
             Expanded(
               child: _QuickCaptureChip(
-                label: 'Camera',
+                label: l10n.camera,
                 icon: Icons.camera_alt_rounded,
                 onTap: () => _pickImage(ImageSource.camera),
               ),
@@ -809,7 +816,7 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
             const SizedBox(width: 8),
             Expanded(
               child: _QuickCaptureChip(
-                label: 'Gallery',
+                label: l10n.gallery,
                 icon: Icons.photo_library_rounded,
                 onTap: () => _pickImage(ImageSource.gallery),
               ),
@@ -817,7 +824,7 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
             const SizedBox(width: 8),
             Expanded(
               child: _QuickCaptureChip(
-                label: 'Drone',
+                label: l10n.drone,
                 customIcon: const _AgriculturalDroneIcon(
                   color: MuzhirColors.forestGreen,
                   size: 24,
@@ -832,11 +839,13 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
   }
 
   Widget _buildPreviewExtras(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final bool isMobile = _selectedSource == ScanSource.mobile;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Icon(
               isMobile ? Icons.smartphone_rounded : Icons.flight_rounded,
@@ -844,12 +853,14 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
               color: MuzhirColors.forestGreen,
             ),
             const SizedBox(width: 6),
-            Text(
-              'Selected via: ${isMobile ? 'Mobile' : 'Drone'}',
-              style: GoogleFonts.lexend(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: MuzhirColors.titleCharcoal.withValues(alpha: 0.55),
+            Expanded(
+              child: Text(
+                l10n.selectedVia(isMobile ? l10n.mobile : l10n.drone),
+                style: GoogleFonts.lexend(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: MuzhirColors.titleCharcoal.withValues(alpha: 0.55),
+                ),
               ),
             ),
           ],
@@ -864,6 +875,7 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
   }
 
   Widget _buildAnalyzeBlock(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final bool enabled =
         _hasImage && _state == _DiagnoseState.preview && !_isAnalyzing;
 
@@ -901,13 +913,13 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
                       ),
                     ),
                   )
-                : const Text('Analyze Plant'),
+                : Text(l10n.analyzePlant),
           ),
         ),
         if (!enabled && !_isAnalyzing) ...[
           const SizedBox(height: 10),
           Text(
-            'Please select an image to enable analysis',
+            l10n.pleaseSelectImage,
             textAlign: TextAlign.center,
             style: GoogleFonts.lexend(
               fontSize: 13,
@@ -929,6 +941,7 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
   // ── Online result (remote API) ─────────────────────────────────────────────
 
   Widget _buildOnlineResultSection(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final d = _diagnosisResult;
     if (d == null) return const SizedBox.shrink();
 
@@ -937,6 +950,9 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
     final isHealthy = d.diagnosis.isHealthy;
     final isAr =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final recommendationText = isAr
+        ? d.recommendation.textAr
+        : d.recommendation.textEn;
 
     return Column(
       children: [
@@ -950,28 +966,69 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
           longitude: d.longitude,
         ),
         if (!isHealthy) ...[
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: OutlinedButton.icon(
-              onPressed: () => _showTreatmentAdviceDialog(context),
-              icon: const Icon(Icons.lightbulb_outline_rounded),
-              label: Text(
-                isAr ? 'عرض نصائح العلاج' : 'Get Treatment Advice',
+          if (recommendationText.trim().isNotEmpty) ...[
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () {
+                  showTreatmentRecommendationModal(
+                    context,
+                    recommendationText: recommendationText,
+                  );
+                },
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: MuzhirColors.forestGreen,
+                  side: BorderSide(
+                    color: MuzhirColors.forestGreen.withValues(alpha: 0.45),
+                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  minimumSize: const Size(double.infinity, 52),
+                  alignment: Alignment.center,
+                  tapTargetSize: MaterialTapTargetSize.padded,
+                ),
+                child: Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.lightbulb_outline_rounded,
+                        size: 22,
+                        color: MuzhirColors.forestGreen.withValues(alpha: 0.95),
+                      ),
+                      const SizedBox(width: 10),
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: MediaQuery.sizeOf(context).width - 120,
+                        ),
+                        child: Text(
+                          l10n.getTreatmentAdvice,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.lexend(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            height: 1.2,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
+          ],
         ] else ...[
           const SizedBox(height: 16),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
+            padding: const EdgeInsetsDirectional.symmetric(horizontal: 8),
             child: Text(
-              isAr
-                  ? 'نباتك بصحة جيدة! لا حاجة للعلاج.'
-                  : 'Your plant is healthy! No treatment needed.',
+              l10n.healthyNoTreatment,
               textAlign: TextAlign.center,
-              textDirection: isAr ? TextDirection.rtl : TextDirection.ltr,
               style: GoogleFonts.lexend(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
@@ -989,7 +1046,7 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
             onPressed: _onScanAnother,
             icon: const Icon(Icons.refresh_rounded),
             label: Text(
-              'Scan Another',
+              l10n.scanAnother,
               style: GoogleFonts.lexend(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
@@ -1258,6 +1315,8 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
   }
 
   Widget _buildRecentSection(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final isAr = Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1277,7 +1336,7 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Recent Diagnosis',
+              l10n.recentDiagnosis,
               style: GoogleFonts.lexend(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
@@ -1293,16 +1352,16 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              child: const Text('View All'),
+              child: Text(l10n.viewAll),
             ),
           ],
         ),
         const SizedBox(height: 12),
         if (_recentScans.isEmpty)
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            padding: const EdgeInsetsDirectional.symmetric(vertical: 8),
             child: Text(
-              'No recent scans yet. Run an analysis above to see your latest results here.',
+              l10n.noRecentScans,
               style: GoogleFonts.lexend(
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
@@ -1314,14 +1373,14 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
         else
           ..._recentScans.map(
             (scan) {
-              final label = _recentDiagnosisLabel(scan);
+              final label = _recentDiagnosisLabel(scan, l10n);
               final healthy = _recentLooksHealthy(label);
               return Padding(
-                padding: const EdgeInsets.only(bottom: 20),
+                padding: const EdgeInsetsDirectional.only(bottom: 20),
                 child: _RecentDiagnosisCard(
-                  cropName: scan.cropName,
+                  cropName: isAr ? scan.cropNameAr : scan.cropName,
                   diagnosisLabel: label,
-                  timeLabel: _recentRelativeTime(scan.createdAt),
+                  timeLabel: _recentRelativeTime(scan.createdAt, l10n),
                   isHealthy: healthy,
                   imageUrl: scan.imageUrl,
                   onTap: () => _openDiagnosisDetail(context, scan),
@@ -1356,7 +1415,7 @@ class _RecentDiagnosisCard extends StatelessWidget {
     final statusColor = isHealthy
         ? MuzhirColors.forestGreen
         : MuzhirColors.infectionSeriousOrange;
-    final url = imageUrl.trim();
+    final url = NetworkUrlHelper.normalizeRemoteUrl(imageUrl);
 
     return Material(
       color: Colors.transparent,
@@ -1364,7 +1423,7 @@ class _RecentDiagnosisCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(18),
         child: Ink(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsetsDirectional.all(14),
           decoration: BoxDecoration(
             color: MuzhirColors.cardWhite,
             borderRadius: BorderRadius.circular(18),
@@ -1411,15 +1470,21 @@ class _RecentDiagnosisCard extends StatelessWidget {
                               ),
                             ),
                           ),
-                          errorWidget: (_, __, ___) => ColoredBox(
-                            color: MuzhirColors.weatherIconCircle
-                                .withValues(alpha: 0.65),
-                            child: Icon(
-                              Icons.local_florist_rounded,
-                              color: MuzhirColors.forestGreen.withValues(alpha: 0.85),
-                              size: 28,
-                            ),
-                          ),
+                          errorWidget: (_, imageUrl, error) {
+                            debugPrint(
+                              '[IMG_ERR] DiagnosePage | $imageUrl | $error',
+                            );
+                            return ColoredBox(
+                              color: MuzhirColors.weatherIconCircle
+                                  .withValues(alpha: 0.65),
+                              child: Icon(
+                                Icons.local_florist_rounded,
+                                color: MuzhirColors.forestGreen
+                                    .withValues(alpha: 0.85),
+                                size: 28,
+                              ),
+                            );
+                          },
                         ),
                 ),
               ),
@@ -1429,7 +1494,7 @@ class _RecentDiagnosisCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      cropName,
+                      TranslationHelper.getLocalizedText(context, cropName),
                       style: GoogleFonts.lexend(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -1438,7 +1503,7 @@ class _RecentDiagnosisCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      diagnosisLabel,
+                      TranslationHelper.getLocalizedText(context, diagnosisLabel),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.lexend(
@@ -1498,7 +1563,7 @@ class _QuickCaptureChip extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(20),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+          padding: const EdgeInsetsDirectional.symmetric(vertical: 10, horizontal: 4),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
@@ -1632,14 +1697,14 @@ class _AgriculturalDroneIcon extends StatelessWidget {
       height: size,
       child: Stack(
         clipBehavior: Clip.none,
-        alignment: Alignment.center,
+        alignment: AlignmentDirectional.center,
         children: [
           Icon(Icons.flight_rounded, size: size * 0.88, color: color),
-          Positioned(
-            right: -1,
+          PositionedDirectional(
+            end: -1,
             bottom: -1,
             child: Container(
-              padding: const EdgeInsets.all(1.5),
+              padding: const EdgeInsetsDirectional.all(1.5),
               decoration: const BoxDecoration(
                 color: MuzhirColors.cardWhite,
                 shape: BoxShape.circle,

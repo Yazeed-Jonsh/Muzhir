@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:io';
+import 'package:muzhir/core/api/api_service.dart';
 import 'package:muzhir/models/muzhir_user.dart';
 
 /// Firestore profile snapshot for the signed-in user, including cache metadata.
@@ -56,3 +58,45 @@ final userStreamProvider = StreamProvider<UserProfileSnapshot>((ref) {
     });
   });
 });
+
+/// Busy flag + actions for profile picture upload/removal.
+class ProfilePictureController extends StateNotifier<bool> {
+  ProfilePictureController() : super(false);
+
+  Future<void> updateProfilePicture(File imageFile) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      throw StateError('Not signed in.');
+    }
+    state = true;
+    try {
+      final imageUrl = await ApiService().uploadProfilePicture(imageFile);
+      await FirebaseFirestore.instance.collection('users').doc(uid).update({
+        'profilePictureUrl': imageUrl,
+      });
+    } finally {
+      state = false;
+    }
+  }
+
+  Future<void> deleteProfilePicture() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      throw StateError('Not signed in.');
+    }
+    state = true;
+    try {
+      await ApiService().removeProfilePicture();
+      await FirebaseFirestore.instance.collection('users').doc(uid).update({
+        'profilePictureUrl': null,
+      });
+    } finally {
+      state = false;
+    }
+  }
+}
+
+final profilePictureControllerProvider =
+    StateNotifierProvider<ProfilePictureController, bool>(
+  (ref) => ProfilePictureController(),
+);

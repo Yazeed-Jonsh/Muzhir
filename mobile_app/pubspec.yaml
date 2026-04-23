@@ -9,9 +9,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
   cupertino_icons: ^1.0.8
+  intl: any
   google_fonts: ^6.2.1
-  provider: ^6.1.2
   firebase_core: ^4.4.0
   cloud_firestore: ^6.1.2
   firebase_auth: ^6.1.4
@@ -20,13 +22,14 @@ dependencies:
   latlong2: ^0.9.1
   geolocator: ^14.0.2
   dotted_border: ^3.1.0
-  flutter_riverpod: ^3.3.1
+  flutter_riverpod: ^2.5.1
   shimmer: ^3.0.0
   connectivity_plus: ^6.1.4
   http: ^1.5.0
   cached_network_image: ^3.4.1
   dio: ^5.9.2
   url_launcher: ^6.3.1
+  flutter_dotenv: ^5.2.1
   # ── On-Device Inference ────────────────────────────────────────────────
   ultralytics_yolo: ^0.3.0
 
@@ -36,8 +39,10 @@ dev_dependencies:
   flutter_lints: ^5.0.0
 
 flutter:
+  generate: true
   uses-material-design: true
   assets:
+    - .env
     - assets/icons/
     - assets/logos/
     # ── ML Models ──────────────────────────────────────────────────────────

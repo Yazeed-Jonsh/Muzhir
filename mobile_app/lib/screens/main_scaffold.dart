@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:muzhir/l10n/app_localizations.dart';
 import 'package:muzhir/services/auth_service.dart';
 import 'package:muzhir/screens/farmer/home_page.dart';
 import 'package:muzhir/screens/farmer/diagnose_page.dart';
@@ -22,13 +23,6 @@ class _MainScaffoldState extends State<MainScaffold> {
   int _currentIndex = 0;
   int _diagnoseRefreshSignal = 0;
 
-  static const List<String> _titles = [
-    'Muzhir',
-    'Diagnose',
-    'Disease Map',
-    'Scan History',
-  ];
-
   void _onTabTapped(int index) {
     setState(() {
       _currentIndex = index;
@@ -46,13 +40,21 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final titles = <String>[
+      l10n.appTitle,
+      l10n.diagnose,
+      l10n.diseaseMap,
+      l10n.scanHistory,
+    ];
+
     return Scaffold(
       extendBody: false,
       extendBodyBehindAppBar: false,
       appBar: AppBar(
-        title: Text(_titles[_currentIndex]),
+        title: Text(titles[_currentIndex]),
         leading: Padding(
-          padding: const EdgeInsets.only(left: 16),
+          padding: const EdgeInsetsDirectional.only(start: 16),
           child: Center(
             child: ClipRRect(
               borderRadius: BorderRadius.circular(4),
@@ -92,7 +94,9 @@ class _MainScaffoldState extends State<MainScaffold> {
       body: IndexedStack(
         index: _currentIndex,
         children: [
-          const FarmerHomePage(),
+          FarmerHomePage(
+            onViewAllHistory: () => setState(() => _currentIndex = 3),
+          ),
           DiagnosePage(
             onViewAllRecent: () => setState(() => _currentIndex = 3),
             isTabVisible: _currentIndex == 1,
@@ -103,7 +107,7 @@ class _MainScaffoldState extends State<MainScaffold> {
         ],
       ),
       bottomNavigationBar: Container(
-        margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        margin: const EdgeInsetsDirectional.fromSTEB(20, 0, 20, 24),
         decoration: BoxDecoration(
           color: Theme.of(context).cardTheme.color ??
               Theme.of(context).colorScheme.surface,
@@ -123,26 +127,26 @@ class _MainScaffoldState extends State<MainScaffold> {
             surfaceTintColor: Colors.transparent,
             selectedIndex: _currentIndex,
             onDestinationSelected: _onTabTapped,
-            destinations: const [
+            destinations: [
               NavigationDestination(
                 icon: Icon(Icons.park_outlined),
                 selectedIcon: Icon(Icons.park_rounded),
-                label: 'Home',
+                label: l10n.home,
               ),
               NavigationDestination(
                 icon: Icon(Icons.biotech_outlined),
                 selectedIcon: Icon(Icons.biotech_rounded),
-                label: 'Diagnose',
+                label: l10n.diagnose,
               ),
               NavigationDestination(
                 icon: Icon(Icons.explore_outlined),
                 selectedIcon: Icon(Icons.explore_rounded),
-                label: 'Map',
+                label: l10n.map,
               ),
               NavigationDestination(
                 icon: Icon(Icons.history_outlined),
                 selectedIcon: Icon(Icons.history_rounded),
-                label: 'History',
+                label: l10n.history,
               ),
             ],
           ),

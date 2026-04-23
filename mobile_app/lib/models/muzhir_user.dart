@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:muzhir/core/utils/network_url_helper.dart';
 
 /// App user profile stored at Firestore `users/{userId}`.
 class MuzhirUser {
@@ -49,7 +50,8 @@ class MuzhirUser {
     final picRaw = data['profilePictureUrl'];
     final String? profilePictureUrl;
     if (picRaw is String && picRaw.trim().isNotEmpty) {
-      profilePictureUrl = picRaw.trim();
+      final normalized = NetworkUrlHelper.normalizeRemoteUrl(picRaw);
+      profilePictureUrl = normalized.isEmpty ? null : normalized;
     } else {
       profilePictureUrl = null;
     }

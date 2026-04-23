@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -7,11 +6,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:muzhir/core/api/api_service.dart';
+import 'package:muzhir/core/utils/network_url_helper.dart';
+import 'package:muzhir/l10n/app_localizations.dart';
 import 'package:muzhir/models/muzhir_user.dart';
 import 'package:muzhir/providers/connectivity_provider.dart';
+import 'package:muzhir/providers/locale_provider.dart';
 import 'package:muzhir/providers/user_stream_provider.dart';
 import 'package:muzhir/screens/farmer/login_screen.dart';
 import 'package:muzhir/services/auth_service.dart';
@@ -53,9 +54,6 @@ class ProfileScreen extends ConsumerWidget {
           avatarRadius: _avatarRadius,
         ),
         error: (error, stackTrace) {
-          // Temporary: surface provider/Firestore failures in the console while debugging.
-          print('ProfileScreen userStreamProvider error: $error');
-          print('ProfileScreen userStreamProvider stackTrace:\n$stackTrace');
           return _ProfileErrorView(
             message: error.toString(),
             headerHeight: _headerHeight,
@@ -274,9 +272,8 @@ String _segmentLanguageCode(String raw) {
 }
 
 String? _nonEmptyProfilePictureUrl(String? raw) {
-  if (raw == null) return null;
-  final t = raw.trim();
-  return t.isEmpty ? null : t;
+  final normalized = NetworkUrlHelper.normalizeRemoteUrl(raw);
+  return normalized.isEmpty ? null : normalized;
 }
 
 void _showAvatarChangeRequiresOnline(BuildContext context) {
@@ -311,29 +308,18 @@ void _showAvatarChangeRequiresOnline(BuildContext context) {
   );
 }
 
-String _formatMemberSince(Timestamp ts) {
+String _formatMemberSince(BuildContext context, Timestamp ts) {
   final date = ts.toDate();
   if (date.year <= 1971) return '—';
-  const months = <String>[
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
-  ];
-  return '${months[date.month - 1]} ${date.year}';
+  final tag = Localizations.localeOf(context).toLanguageTag();
+  return DateFormat.yMMMM(tag).format(date);
 }
 
-String _displayRoleLabel(String roleName) {
+String _displayRoleLabel(BuildContext context, String roleName) {
+  final l10n = AppLocalizations.of(context)!;
   final t = roleName.trim();
-  if (t.isEmpty) return 'Member';
+  if (t.isEmpty) return l10n.roleMember;
+  if (t.toLowerCase() == 'farmer') return l10n.roleFarmer;
   return '${t[0].toUpperCase()}${t.length > 1 ? t.substring(1).toLowerCase() : ''}';
 }
 
@@ -596,41 +582,12 @@ class _ProfileLoadedView extends ConsumerStatefulWidget {
 }
 
 class _ProfileLoadedViewState extends ConsumerState<_ProfileLoadedView> {
-  bool _uploadingAvatar = false;
-  static const String _backendBaseUrl = String.fromEnvironment(
-    'MUZHIR_BACKEND_URL',
-    defaultValue: 'http://10.0.2.2:8000',
-  );
-
-  Uri _profilePhotoEndpoint() => Uri.parse('$_backendBaseUrl/api/v1/profile-photo');
-
-  Future<Map<String, dynamic>> _sendMultipartRequest(
-    http.MultipartRequest request, {
-    required String failurePrefix,
-  }) async {
-    final streamed = await request.send();
-    final body = await streamed.stream.bytesToString();
-    if (streamed.statusCode < 200 || streamed.statusCode >= 300) {
-      final detail = body.trim().isEmpty ? 'status ${streamed.statusCode}' : body.trim();
-      throw HttpException('$failurePrefix: $detail');
-    }
-
-    if (body.trim().isEmpty) {
-      return <String, dynamic>{};
-    }
-
-    final decoded = jsonDecode(body);
-    if (decoded is Map<String, dynamic>) {
-      return decoded;
-    }
-    throw const FormatException('Backend returned non-object JSON.');
-  }
-
   Widget _buildAvatarFace() {
     final user = widget.user;
     final radius = widget.avatarRadius;
     final diameter = radius * 2;
     final url = _nonEmptyProfilePictureUrl(user.profilePictureUrl);
+    final uploading = ref.watch(profilePictureControllerProvider);
     final initials = Text(
       user.initials,
       style: GoogleFonts.lexend(
@@ -659,7 +616,10 @@ class _ProfileLoadedViewState extends ConsumerState<_ProfileLoadedView> {
             ),
           ),
         ),
-        errorWidget: (context, _, __) => Center(child: initials),
+        errorWidget: (context, imageUrl, error) {
+          debugPrint('[IMG_ERR] ProfileScreen | $imageUrl | $error');
+          return Center(child: initials);
+        },
       );
     } else {
       core = Center(child: initials);
@@ -669,7 +629,7 @@ class _ProfileLoadedViewState extends ConsumerState<_ProfileLoadedView> {
       fit: StackFit.expand,
       children: [
         core,
-        if (_uploadingAvatar)
+        if (uploading)
           ColoredBox(
             color: MuzhirColors.cardWhite.withValues(alpha: 0.72),
             child: const Center(
@@ -691,7 +651,8 @@ class _ProfileLoadedViewState extends ConsumerState<_ProfileLoadedView> {
     required bool isOffline,
     required bool editingEnabled,
   }) {
-    final disabled = isOffline || !editingEnabled;
+    final uploading = ref.watch(profilePictureControllerProvider);
+    final disabled = isOffline || !editingEnabled || uploading;
     return Opacity(
       opacity: disabled ? 0.5 : 1,
       child: Material(
@@ -783,12 +744,12 @@ class _ProfileLoadedViewState extends ConsumerState<_ProfileLoadedView> {
                   ),
                   _AvatarSheetTile(
                     icon: Icons.photo_camera_outlined,
-                    label: 'Take Photo',
+                    label: 'Upload New Picture (Camera)',
                     onTap: () => Navigator.of(sheetContext).pop('camera'),
                   ),
                   _AvatarSheetTile(
                     icon: Icons.photo_library_outlined,
-                    label: 'Choose from Gallery',
+                    label: 'Upload New Picture (Gallery)',
                     onTap: () => Navigator.of(sheetContext).pop('gallery'),
                   ),
                   if (hasPhoto)
@@ -841,26 +802,9 @@ class _ProfileLoadedViewState extends ConsumerState<_ProfileLoadedView> {
     BuildContext context,
     XFile xFile,
   ) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-
-    setState(() => _uploadingAvatar = true);
+    final controller = ref.read(profilePictureControllerProvider.notifier);
     try {
-      final request = http.MultipartRequest('POST', _profilePhotoEndpoint())
-        ..fields['userId'] = uid
-        ..files.add(await http.MultipartFile.fromPath('image', xFile.path));
-      final payload = await _sendMultipartRequest(
-        request,
-        failurePrefix: 'Could not upload profile image',
-      );
-      final downloadUrl = (payload['imageUrl'] ?? '').toString().trim();
-      if (downloadUrl.isEmpty) {
-        throw const FormatException('Backend did not return imageUrl.');
-      }
-
-      await FirebaseFirestore.instance.collection('users').doc(uid).update({
-        'profilePictureUrl': downloadUrl,
-      });
+      await controller.updateProfilePicture(File(xFile.path));
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -878,7 +822,7 @@ class _ProfileLoadedViewState extends ConsumerState<_ProfileLoadedView> {
           ),
         );
       }
-    } catch (_) {
+    } catch (e) {
       if (context.mounted) {
         final scheme = Theme.of(context).colorScheme;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -886,7 +830,7 @@ class _ProfileLoadedViewState extends ConsumerState<_ProfileLoadedView> {
             behavior: SnackBarBehavior.floating,
             backgroundColor: scheme.error,
             content: Text(
-              'Could not upload photo. Please try again.',
+              'Could not upload photo. Please try again.\n$e',
               style: GoogleFonts.lexend(
                 color: scheme.onError,
                 fontSize: 15,
@@ -896,31 +840,13 @@ class _ProfileLoadedViewState extends ConsumerState<_ProfileLoadedView> {
           ),
         );
       }
-    } finally {
-      if (mounted) setState(() => _uploadingAvatar = false);
     }
   }
 
   Future<void> _removeProfilePhoto(BuildContext context) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-
-    setState(() => _uploadingAvatar = true);
+    final controller = ref.read(profilePictureControllerProvider.notifier);
     try {
-      final existingUrl = _nonEmptyProfilePictureUrl(widget.user.profilePictureUrl);
-      if (existingUrl != null) {
-        final request = http.MultipartRequest('DELETE', _profilePhotoEndpoint())
-          ..fields['userId'] = uid
-          ..fields['imageUrl'] = existingUrl;
-        await _sendMultipartRequest(
-          request,
-          failurePrefix: 'Could not remove profile image',
-        );
-      }
-
-      await FirebaseFirestore.instance.collection('users').doc(uid).update({
-        'profilePictureUrl': FieldValue.delete(),
-      });
+      await controller.deleteProfilePicture();
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -938,7 +864,7 @@ class _ProfileLoadedViewState extends ConsumerState<_ProfileLoadedView> {
           ),
         );
       }
-    } catch (_) {
+    } catch (e) {
       if (context.mounted) {
         final scheme = Theme.of(context).colorScheme;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -946,7 +872,7 @@ class _ProfileLoadedViewState extends ConsumerState<_ProfileLoadedView> {
             behavior: SnackBarBehavior.floating,
             backgroundColor: scheme.error,
             content: Text(
-              'Could not remove photo. Please try again.',
+              'Could not remove photo. Please try again.\n$e',
               style: GoogleFonts.lexend(
                 color: scheme.onError,
                 fontSize: 15,
@@ -956,8 +882,6 @@ class _ProfileLoadedViewState extends ConsumerState<_ProfileLoadedView> {
           ),
         );
       }
-    } finally {
-      if (mounted) setState(() => _uploadingAvatar = false);
     }
   }
 
@@ -992,127 +916,145 @@ class _ProfileLoadedViewState extends ConsumerState<_ProfileLoadedView> {
 
     final topSafe = MediaQuery.paddingOf(context).top;
     final editingEnabled = widget.editingEnabled;
+    final avatarBusy = ref.watch(profilePictureControllerProvider);
 
-    return CustomScrollView(
-      physics: const BouncingScrollPhysics(),
-      slivers: [
-        if (!user.isActive)
-          SliverPersistentHeader(
-            pinned: true,
-            delegate: _DisabledAccountBannerDelegate(topPadding: topSafe),
-          ),
-        SliverToBoxAdapter(
-          child: _CurvedHeaderBlock(
-            headerHeight: widget.headerHeight,
-            headerCurve: widget.headerCurve,
-            avatarRadius: widget.avatarRadius,
-            avatarChild: _buildAvatarFace(),
-            avatarAccessory: _buildCameraAccessory(
-              isOffline: isOffline,
-              editingEnabled: editingEnabled,
+    return Stack(
+      children: [
+        CustomScrollView(
+          physics: const BouncingScrollPhysics(),
+          slivers: [
+            if (!user.isActive)
+              SliverPersistentHeader(
+                pinned: true,
+                delegate: _DisabledAccountBannerDelegate(topPadding: topSafe),
+              ),
+            SliverToBoxAdapter(
+              child: _CurvedHeaderBlock(
+                headerHeight: widget.headerHeight,
+                headerCurve: widget.headerCurve,
+                avatarRadius: widget.avatarRadius,
+                avatarChild: _buildAvatarFace(),
+                avatarAccessory: _buildCameraAccessory(
+                  isOffline: isOffline,
+                  editingEnabled: editingEnabled,
+                ),
+                topBar: _HeaderBackBar(
+                  onBack: () => Navigator.of(context).maybePop(),
+                ),
+                // Red disabled banner already reserves the status bar; avoid double inset.
+                omitTopSafePadding: !user.isActive,
+              ),
             ),
-            topBar: _HeaderBackBar(
-              onBack: () => Navigator.of(context).maybePop(),
-            ),
-            // Red disabled banner already reserves the status bar; avoid double inset.
-            omitTopSafePadding: !user.isActive,
-          ),
-        ),
-        SliverPadding(
-          padding: EdgeInsets.fromLTRB(
-            _horizontalPagePadding(context),
-            20,
-            _horizontalPagePadding(context),
-            32,
-          ),
-          sliver: SliverToBoxAdapter(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 520),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.center,
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                _horizontalPagePadding(context),
+                20,
+                _horizontalPagePadding(context),
+                32,
+              ),
+              sliver: SliverToBoxAdapter(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    child: Column(
                       children: [
-                        Flexible(
-                          child: Text(
-                            displayName,
-                            textAlign: TextAlign.center,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: nameStyle.copyWith(
-                              color: editingEnabled
-                                  ? MuzhirColors.titleCharcoal
-                                  : MuzhirColors.mutedGrey,
-                            ),
-                          ),
-                        ),
-                        if (editingEnabled)
-                          IconButton(
-                            tooltip: 'Edit Name',
-                            onPressed: () => _showEditFullNameDialog(
-                              context,
-                              ref,
-                              user,
-                              allowSave: true,
-                            ),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(
-                              minWidth: 40,
-                              minHeight: 40,
-                            ),
-                            icon: Icon(
-                              Icons.edit_outlined,
-                              size: 22,
-                              color: MuzhirColors.forestGreen.withValues(
-                                alpha: 0.9,
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                displayName,
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: nameStyle.copyWith(
+                                  color: editingEnabled
+                                      ? MuzhirColors.titleCharcoal
+                                      : MuzhirColors.mutedGrey,
+                                ),
                               ),
                             ),
+                            if (editingEnabled)
+                              IconButton(
+                                tooltip: 'Edit Name',
+                                onPressed: () => _showEditFullNameDialog(
+                                  context,
+                                  ref,
+                                  user,
+                                  allowSave: true,
+                                ),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(
+                                  minWidth: 40,
+                                  minHeight: 40,
+                                ),
+                                icon: Icon(
+                                  Icons.edit_outlined,
+                                  size: 22,
+                                  color: MuzhirColors.forestGreen.withValues(
+                                    alpha: 0.9,
+                                  ),
+                                ),
+                              ),
+                            if (user.isActive) ...[
+                              const SizedBox(width: 4),
+                              Container(
+                                width: 10,
+                                height: 10,
+                                decoration: const BoxDecoration(
+                                  color: MuzhirColors.forestGreen,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Tooltip(
+                          message:
+                              'Email is managed by your account and cannot be changed here.',
+                          child: Text(
+                            emailLine,
+                            textAlign: TextAlign.center,
+                            style: emailStyle,
                           ),
-                        if (user.isActive) ...[
-                          const SizedBox(width: 4),
-                          Container(
-                            width: 10,
-                            height: 10,
-                            decoration: const BoxDecoration(
-                              color: MuzhirColors.forestGreen,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
+                        ),
+                        if (widget.isFromCache) ...[
+                          const SizedBox(height: 14),
+                          const _CachedProfileDataBanner(),
                         ],
+                        const SizedBox(height: 28),
+                        _AccountInfoCard(
+                          roleLabel: _displayRoleLabel(context, user.roleName),
+                          selectedLanguageCode: selectedLang,
+                          onLanguageChanged: widget.onLanguageChanged,
+                          memberSince: _formatMemberSince(context, user.createdAt),
+                          editingEnabled: editingEnabled,
+                        ),
+                        const SizedBox(height: 20),
+                        const _SettingsActionsCard(),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Tooltip(
-                      message:
-                          'Email is managed by your account and cannot be changed here.',
-                      child: Text(
-                        emailLine,
-                        textAlign: TextAlign.center,
-                        style: emailStyle,
-                      ),
-                    ),
-                    if (widget.isFromCache) ...[
-                      const SizedBox(height: 14),
-                      const _CachedProfileDataBanner(),
-                    ],
-                    const SizedBox(height: 28),
-                    _AccountInfoCard(
-                      roleLabel: _displayRoleLabel(user.roleName),
-                      selectedLanguageCode: selectedLang,
-                      onLanguageChanged: widget.onLanguageChanged,
-                      memberSince: _formatMemberSince(user.createdAt),
-                      editingEnabled: editingEnabled,
-                    ),
-                    const SizedBox(height: 20),
-                    const _SettingsActionsCard(),
-                  ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (avatarBusy)
+          Positioned.fill(
+            child: AbsorbPointer(
+              child: ColoredBox(
+                color: Colors.black.withValues(alpha: 0.12),
+                child: const Center(
+                  child: CircularProgressIndicator(
+                    color: MuzhirColors.forestGreen,
+                  ),
                 ),
               ),
             ),
           ),
-        ),
       ],
     );
   }
@@ -1549,7 +1491,7 @@ class _HeaderBackBar extends StatelessWidget {
   }
 }
 
-class _AccountInfoCard extends StatelessWidget {
+class _AccountInfoCard extends ConsumerWidget {
   const _AccountInfoCard({
     required this.roleLabel,
     required this.selectedLanguageCode,
@@ -1565,43 +1507,36 @@ class _AccountInfoCard extends StatelessWidget {
   final bool editingEnabled;
 
   @override
-  Widget build(BuildContext context) {
-    final languageControl = SegmentedButton<String>(
-      showSelectedIcon: false,
-      style: SegmentedButton.styleFrom(
-        backgroundColor: MuzhirColors.creamScaffold,
-        foregroundColor: MuzhirColors.titleCharcoal,
-        selectedForegroundColor: MuzhirColors.cardWhite,
-        selectedBackgroundColor: MuzhirColors.forestGreen,
-        side: BorderSide(
-          color: MuzhirColors.weatherIconCircle.withValues(alpha: 0.9),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final overrideLocale = ref.watch(localeOverrideProvider);
+    final effectiveLanguageCode =
+        (overrideLocale?.languageCode ?? selectedLanguageCode).toLowerCase();
+
+    void onTapLanguage(String langCode) {
+      ref.read(localeOverrideProvider.notifier).state = Locale(langCode);
+      if (langCode != selectedLanguageCode) {
+        onLanguageChanged(langCode);
+      }
+    }
+
+    final languageControl = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _LanguageFlagButton(
+          flag: '🇸🇦',
+          tooltip: l10n.language,
+          selected: effectiveLanguageCode == 'ar',
+          onTap: () => onTapLanguage('ar'),
         ),
-        visualDensity: VisualDensity.compact,
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        textStyle: GoogleFonts.lexend(
-          fontSize: 15,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      segments: const [
-        ButtonSegment<String>(
-          value: 'ar',
-          label: Text('🇸🇦'),
-          tooltip: 'Arabic',
-        ),
-        ButtonSegment<String>(
-          value: 'en',
-          label: Text('🇬🇧'),
-          tooltip: 'English',
+        const SizedBox(width: 10),
+        _LanguageFlagButton(
+          flag: '🇬🇧',
+          tooltip: l10n.language,
+          selected: effectiveLanguageCode == 'en',
+          onTap: () => onTapLanguage('en'),
         ),
       ],
-      selected: {selectedLanguageCode},
-      onSelectionChanged: (Set<String> next) {
-        if (next.isEmpty) return;
-        final lang = next.first;
-        if (lang == selectedLanguageCode) return;
-        onLanguageChanged(lang);
-      },
     );
 
     return Container(
@@ -1624,7 +1559,7 @@ class _AccountInfoCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(0, 14, 0, 6),
             child: Text(
-              'Account',
+              l10n.account,
               style: GoogleFonts.lexend(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
@@ -1638,7 +1573,7 @@ class _AccountInfoCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  'Language',
+                  l10n.language,
                   style: GoogleFonts.lexend(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -1674,7 +1609,7 @@ class _AccountInfoCard extends StatelessWidget {
                   : MuzhirColors.mutedGrey,
               size: 26,
             ),
-            title: 'Role',
+            title: l10n.role,
             value: roleLabel,
           ),
           const Divider(height: 1, thickness: 1, color: Color(0xFFE8EDE4)),
@@ -1686,7 +1621,7 @@ class _AccountInfoCard extends StatelessWidget {
                   : MuzhirColors.mutedGrey,
               size: 26,
             ),
-            title: 'Member since',
+            title: l10n.memberSince,
             value: memberSince,
           ),
           const SizedBox(height: 16),
@@ -1696,30 +1631,70 @@ class _AccountInfoCard extends StatelessWidget {
   }
 }
 
-class _SettingsActionsCard extends StatelessWidget {
-  const _SettingsActionsCard();
+class _LanguageFlagButton extends StatelessWidget {
+  const _LanguageFlagButton({
+    required this.flag,
+    required this.tooltip,
+    required this.selected,
+    required this.onTap,
+  });
 
-  Future<void> _onTestBackend(BuildContext context) async {
-    final ok = await ApiService().checkHealth();
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(16),
-        backgroundColor: ok ? MuzhirColors.forestGreen : MuzhirColors.earthyClayRed,
-        content: Text(
-          ok
-              ? 'Backend health check succeeded.'
-              : 'Backend unreachable or unhealthy. See console for Dio logs.',
-          style: GoogleFonts.lexend(
-            color: MuzhirColors.cardWhite,
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
+  final String flag;
+  final String tooltip;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Ink(
+            width: 56,
+            height: 44,
+            decoration: BoxDecoration(
+              color: MuzhirColors.creamScaffold,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: selected
+                    ? MuzhirColors.forestGreen
+                    : MuzhirColors.weatherIconCircle.withValues(alpha: 0.9),
+                width: selected ? 2 : 1.2,
+              ),
+            ),
+            child: Stack(
+              children: [
+                Center(
+                  child: Text(
+                    flag,
+                    style: const TextStyle(fontSize: 24),
+                  ),
+                ),
+                if (selected)
+                  const PositionedDirectional(
+                    top: 2,
+                    end: 2,
+                    child: Icon(
+                      Icons.check_circle,
+                      size: 16,
+                      color: MuzhirColors.forestGreen,
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
+}
+
+class _SettingsActionsCard extends StatelessWidget {
+  const _SettingsActionsCard();
 
   Future<void> _onSignOut(BuildContext context) async {
     await AuthService().signOut();
@@ -1729,6 +1704,7 @@ class _SettingsActionsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
@@ -1749,7 +1725,7 @@ class _SettingsActionsCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(0, 14, 0, 6),
             child: Text(
-              'Settings & Actions',
+              l10n.settingsAndActions,
               style: GoogleFonts.lexend(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
@@ -1757,48 +1733,6 @@ class _SettingsActionsCard extends StatelessWidget {
               ),
             ),
           ),
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () => _onTestBackend(context),
-              borderRadius: BorderRadius.circular(16),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const SizedBox(
-                      width: 40,
-                      child: Center(
-                        child: Icon(
-                          Icons.cloud_done_outlined,
-                          color: MuzhirColors.forestGreen,
-                          size: 26,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Test backend connection',
-                        style: GoogleFonts.lexend(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: MuzhirColors.titleCharcoal,
-                        ),
-                      ),
-                    ),
-                    const Icon(
-                      Icons.chevron_right_rounded,
-                      color: MuzhirColors.mutedGrey,
-                      size: 22,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const Divider(height: 1, thickness: 1, color: Color(0xFFE8EDE4)),
           Material(
             color: Colors.transparent,
             child: InkWell(
@@ -1822,7 +1756,7 @@ class _SettingsActionsCard extends StatelessWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Sign Out',
+                        l10n.signOut,
                         style: GoogleFonts.lexend(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,

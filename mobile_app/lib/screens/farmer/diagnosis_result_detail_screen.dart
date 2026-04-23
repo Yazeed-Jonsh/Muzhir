@@ -2,11 +2,13 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:muzhir/core/api/api_service.dart';
+import 'package:muzhir/core/session/treatment_advice_visibility.dart';
+import 'package:muzhir/l10n/app_localizations.dart';
 import 'package:muzhir/models/diagnosis_response.dart';
 import 'package:muzhir/theme/app_theme.dart';
 import 'package:muzhir/widgets/diagnosis_result_card.dart';
 import 'package:muzhir/widgets/recent_scan_tile.dart';
-import 'package:muzhir/widgets/treatment_advice_dialog.dart';
+import 'package:muzhir/widgets/treatment_recommendation_section.dart';
 
 /// Full-screen review of a past diagnosis (same content as the Diagnose flow result step).
 ///
@@ -41,14 +43,37 @@ class _DiagnosisResultDetailScreenState extends State<DiagnosisResultDetailScree
   bool _loading = false;
   bool _deleting = false;
   String? _error;
+  /// AI recommendation panel visibility (synced with [TreatmentAdviceVisibility] when [scanId] exists).
+  bool _isRecommendationVisible = false;
+
+  String _scanIdForPersistence() {
+    final id = (widget.scanId ?? _resolved?.scanId ?? widget.diagnosis?.scanId ?? '')
+        .trim();
+    return id;
+  }
+
+  void _syncVisibilityFromSession() {
+    _isRecommendationVisible =
+        TreatmentAdviceVisibility.isExpanded(_scanIdForPersistence());
+  }
 
   @override
   void initState() {
     super.initState();
     if (widget.diagnosis != null) {
       _resolved = widget.diagnosis;
+      _syncVisibilityFromSession();
     } else {
       _loadFromApi();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant DiagnosisResultDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.scanId != oldWidget.scanId ||
+        widget.diagnosis != oldWidget.diagnosis) {
+      setState(_syncVisibilityFromSession);
     }
   }
 
@@ -65,12 +90,13 @@ class _DiagnosisResultDetailScreenState extends State<DiagnosisResultDetailScree
       setState(() {
         _resolved = d;
         _loading = false;
+        _syncVisibilityFromSession();
       });
     } on DioException catch (e) {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = _messageFromDio(e);
+        _error = _messageFromDio(e, AppLocalizations.of(context)!);
       });
     } catch (e) {
       if (!mounted) return;
@@ -81,14 +107,14 @@ class _DiagnosisResultDetailScreenState extends State<DiagnosisResultDetailScree
     }
   }
 
-  String _messageFromDio(DioException e) {
+  String _messageFromDio(DioException e, AppLocalizations l10n) {
     final data = e.response?.data;
     if (data is Map && data['detail'] != null) {
       final d = data['detail'];
       if (d is String) return d;
       if (d is List && d.isNotEmpty) return d.first.toString();
     }
-    return e.message ?? 'Could not load scan.';
+    return e.message ?? l10n.couldNotLoadScan;
   }
 
   String? _activeScanId() {
@@ -97,23 +123,24 @@ class _DiagnosisResultDetailScreenState extends State<DiagnosisResultDetailScree
   }
 
   Future<bool> _confirmDeleteScan() async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
           title: Text(
-            'Delete scan',
+            l10n.deleteScan,
             style: GoogleFonts.lexend(fontWeight: FontWeight.w700),
           ),
           content: Text(
-            'Are you sure you want to delete this scan?',
+            l10n.deleteScanConfirm,
             style: GoogleFonts.lexend(fontWeight: FontWeight.w500),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
               child: Text(
-                'Cancel',
+                l10n.cancel,
                 style: GoogleFonts.lexend(
                   fontWeight: FontWeight.w600,
                   color: MuzhirColors.mutedGrey,
@@ -127,7 +154,7 @@ class _DiagnosisResultDetailScreenState extends State<DiagnosisResultDetailScree
                 foregroundColor: MuzhirColors.cardWhite,
               ),
               child: Text(
-                'Delete',
+                l10n.delete,
                 style: GoogleFonts.lexend(fontWeight: FontWeight.w700),
               ),
             ),
@@ -139,6 +166,7 @@ class _DiagnosisResultDetailScreenState extends State<DiagnosisResultDetailScree
   }
 
   Future<void> _onDeletePressed() async {
+    final l10n = AppLocalizations.of(context)!;
     final scanId = _activeScanId();
     if (scanId == null || _deleting) return;
     final confirmed = await _confirmDeleteScan();
@@ -154,10 +182,10 @@ class _DiagnosisResultDetailScreenState extends State<DiagnosisResultDetailScree
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
+          margin: const EdgeInsetsDirectional.all(16),
           backgroundColor: MuzhirColors.earthyClayRed,
           content: Text(
-            _messageFromDio(e),
+            _messageFromDio(e, l10n),
             style: GoogleFonts.lexend(
               color: MuzhirColors.cardWhite,
               fontWeight: FontWeight.w600,
@@ -172,10 +200,10 @@ class _DiagnosisResultDetailScreenState extends State<DiagnosisResultDetailScree
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
+          margin: const EdgeInsetsDirectional.all(16),
           backgroundColor: MuzhirColors.earthyClayRed,
           content: Text(
-            'Could not delete scan: $e',
+            l10n.couldNotDeleteScan(e.toString()),
             style: GoogleFonts.lexend(
               color: MuzhirColors.cardWhite,
               fontWeight: FontWeight.w600,
@@ -191,10 +219,11 @@ class _DiagnosisResultDetailScreenState extends State<DiagnosisResultDetailScree
   }
 
   AppBar _buildAppBar() {
+    final l10n = AppLocalizations.of(context)!;
     final canDelete = _activeScanId() != null;
     return AppBar(
       title: Text(
-        'Diagnosis',
+        l10n.diagnosis,
         style: GoogleFonts.lexend(fontWeight: FontWeight.w700),
       ),
       actions: [
@@ -208,7 +237,7 @@ class _DiagnosisResultDetailScreenState extends State<DiagnosisResultDetailScree
                 )
               : const Icon(Icons.delete_outline),
           color: MuzhirColors.earthyClayRed,
-          tooltip: 'Delete scan',
+          tooltip: l10n.deleteScanTooltip,
         ),
       ],
     );
@@ -216,6 +245,7 @@ class _DiagnosisResultDetailScreenState extends State<DiagnosisResultDetailScree
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     if (_loading) {
       return Scaffold(
         backgroundColor: MuzhirColors.creamScaffold,
@@ -232,7 +262,7 @@ class _DiagnosisResultDetailScreenState extends State<DiagnosisResultDetailScree
         appBar: _buildAppBar(),
         body: Center(
           child: Padding(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsetsDirectional.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -253,7 +283,7 @@ class _DiagnosisResultDetailScreenState extends State<DiagnosisResultDetailScree
                     });
                     _loadFromApi();
                   },
-                  child: const Text('Retry'),
+                  child: Text(l10n.retry),
                 ),
               ],
             ),
@@ -267,7 +297,7 @@ class _DiagnosisResultDetailScreenState extends State<DiagnosisResultDetailScree
       return Scaffold(
         backgroundColor: MuzhirColors.creamScaffold,
         appBar: _buildAppBar(),
-        body: const Center(child: Text('No diagnosis data.')),
+        body: Center(child: Text(l10n.noDiagnosisData)),
       );
     }
 
@@ -276,12 +306,15 @@ class _DiagnosisResultDetailScreenState extends State<DiagnosisResultDetailScree
     final isHealthy = d.isHealthy;
     final isAr =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final recommendationText = isAr
+        ? diagnosis.recommendation.textAr
+        : diagnosis.recommendation.textEn;
 
     return Scaffold(
       backgroundColor: MuzhirColors.creamScaffold,
       appBar: _buildAppBar(),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+        padding: const EdgeInsetsDirectional.fromSTEB(16, 16, 16, 32),
         children: [
           DiagnosisResultCard(
             cropType: widget.cropType,
@@ -293,29 +326,30 @@ class _DiagnosisResultDetailScreenState extends State<DiagnosisResultDetailScree
             longitude: diagnosis.longitude,
           ),
           if (!isHealthy) ...[
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: OutlinedButton.icon(
-                onPressed: () =>
-                    presentTreatmentAdviceDialog(context, diagnosis),
-                icon: const Icon(Icons.lightbulb_outline_rounded),
-                label: Text(
-                  isAr ? 'عرض نصائح العلاج' : 'Get Treatment Advice',
-                ),
+            if (recommendationText.trim().isNotEmpty) ...[
+              const SizedBox(height: 16),
+              TreatmentRecommendationSection(
+                expanded: _isRecommendationVisible,
+                onToggle: () {
+                  final id = _scanIdForPersistence();
+                  setState(() {
+                    _isRecommendationVisible = !_isRecommendationVisible;
+                    TreatmentAdviceVisibility.setExpanded(
+                      id,
+                      _isRecommendationVisible,
+                    );
+                  });
+                },
+                recommendationText: recommendationText,
               ),
-            ),
+            ],
           ] else ...[
             const SizedBox(height: 16),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
+              padding: const EdgeInsetsDirectional.symmetric(horizontal: 8),
               child: Text(
-                isAr
-                    ? 'نباتك بصحة جيدة! لا حاجة للعلاج.'
-                    : 'Your plant is healthy! No treatment needed.',
+                l10n.healthyNoTreatment,
                 textAlign: TextAlign.center,
-                textDirection: isAr ? TextDirection.rtl : TextDirection.ltr,
                 style: GoogleFonts.lexend(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,

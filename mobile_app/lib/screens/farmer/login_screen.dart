@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:muzhir/l10n/app_localizations.dart';
 import 'package:muzhir/theme/app_theme.dart';
 import 'package:muzhir/widgets/muzhir_auth_page_layout.dart';
 import '../../services/auth_service.dart';
@@ -39,8 +40,9 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       if (!mounted) return;
       if (user != null) {
+        final l10n = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Signed in successfully')),
+          SnackBar(content: Text(l10n.authSignedInSuccessfully)),
         );
       }
     } catch (e) {
@@ -59,15 +61,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
     return MuzhirAuthPageLayout(
-      title: 'Welcome Back',
-      subtitle: 'Sign in to manage your farm with AI-powered insights.',
+      title: l10n.authWelcomeBack,
+      subtitle: l10n.authSignInSubtitle,
       cardContent: Form(
         key: _formKey,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            muzhirAuthInputLabel('Email Address'),
+            muzhirAuthInputLabel(l10n.authEmailAddress),
             TextFormField(
               controller: _emailController,
               keyboardType: TextInputType.emailAddress,
@@ -78,16 +82,16 @@ class _LoginScreenState extends State<LoginScreen> {
               decoration: muzhirAuthInputDecoration(
                 context: context,
                 prefixIcon: Icons.email_outlined,
-                hintText: 'your@email.com',
+                hintText: l10n.authHintEmail,
               ),
               validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'Enter your email';
-                if (!v.contains('@')) return 'Enter a valid email';
+                if (v == null || v.trim().isEmpty) return l10n.authEmailRequired;
+                if (!v.contains('@')) return l10n.authEmailInvalid;
                 return null;
               },
             ),
             const SizedBox(height: 22),
-            muzhirAuthInputLabel('Password'),
+            muzhirAuthInputLabel(l10n.authPassword),
             TextFormField(
               controller: _passwordController,
               obscureText: _obscurePassword,
@@ -98,10 +102,11 @@ class _LoginScreenState extends State<LoginScreen> {
               decoration: muzhirAuthInputDecoration(
                 context: context,
                 prefixIcon: Icons.lock_outline_rounded,
-                hintText: 'Enter your password',
+                hintText: l10n.authHintPassword,
                 subtleHint: true,
                 suffixIcon: IconButton(
-                  tooltip: _obscurePassword ? 'Show password' : 'Hide password',
+                  tooltip:
+                      _obscurePassword ? l10n.authShowPassword : l10n.authHidePassword,
                   style: IconButton.styleFrom(
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     visualDensity: VisualDensity.compact,
@@ -117,7 +122,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               validator: (v) {
-                if (v == null || v.isEmpty) return 'Enter your password';
+                if (v == null || v.isEmpty) return l10n.authPasswordRequired;
                 return null;
               },
             ),
@@ -129,9 +134,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   final email = _emailController.text.trim();
                   if (email.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Please enter your email first'),
-                      ),
+                      SnackBar(content: Text(l10n.authEnterEmailFirst)),
                     );
                     return;
                   }
@@ -139,9 +142,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     await AuthService().sendPasswordReset(email);
                     if (!context.mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Password reset email sent!'),
-                      ),
+                      SnackBar(content: Text(l10n.authPasswordResetSent)),
                     );
                   } catch (e) {
                     if (!context.mounted) return;
@@ -162,7 +163,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
                 child: Text(
-                  'Forgot Password?',
+                  l10n.authForgotPassword,
                   style: GoogleFonts.lexend(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
@@ -173,11 +174,10 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             const SizedBox(height: 20),
             MuzhirAuthPrimaryButton(
-              label: 'Login',
+              label: l10n.authLogin,
               loading: _isLoading,
               onPressed: _onLogin,
             ),
-            // This controls the gap between the card/button and the footer link
             const SizedBox(height: 24),
             Center(
               child: TextButton(
@@ -195,8 +195,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   );
                 },
                 child: muzhirAuthFooterLinkRichText(
-                  question: "Don't have an account? ",
-                  action: 'Sign Up',
+                  question: l10n.authDontHaveAccount,
+                  action: l10n.authSignUp,
                 ),
               ),
             ),

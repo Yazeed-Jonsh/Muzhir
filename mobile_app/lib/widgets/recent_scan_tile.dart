@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:muzhir/core/utils/translation_helper.dart';
 import 'package:muzhir/theme/app_theme.dart';
+import 'package:muzhir/widgets/recent_scan_thumbnail.dart';
 
 /// Capture source for a scan entry.
 enum ScanSource { mobile, drone }
@@ -9,18 +11,22 @@ class RecentScan {
   const RecentScan({
     required this.plantName,
     required this.diseaseName,
-    required this.confidencePercent,
+    this.confidencePercent,
     required this.timeAgo,
     required this.source,
     this.isHealthy = false,
+    this.imageUrl,
   });
 
   final String plantName;
   final String diseaseName;
-  final int confidencePercent;
+  /// Whole percent (0–100); when null the confidence badge is hidden.
+  final int? confidencePercent;
   final String timeAgo;
   final ScanSource source;
   final bool isHealthy;
+  /// Thumbnail URL from API; placeholder if null or empty.
+  final String? imageUrl;
 }
 
 /// Displays a single recent scan row with:
@@ -52,20 +58,7 @@ class RecentScanTile extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Thumbnail placeholder
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: MuzhirColors.luminousLime.withValues(alpha: 0.25),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              Icons.local_florist_rounded,
-              color: MuzhirColors.coreLeafGreen,
-              size: 28,
-            ),
-          ),
+          RecentScanThumbnail(imageUrl: scan.imageUrl),
           const SizedBox(width: 14),
 
           // Plant name, disease, time
@@ -74,14 +67,14 @@ class RecentScanTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  scan.plantName,
+                  TranslationHelper.getLocalizedText(context, scan.plantName),
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  scan.diseaseName,
+                  TranslationHelper.getLocalizedText(context, scan.diseaseName),
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: statusColor,
                         fontWeight: FontWeight.w500,
@@ -103,25 +96,25 @@ class RecentScanTile extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              // Confidence badge
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(20),
+              if (scan.confidencePercent != null) ...[
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '${scan.confidencePercent}%',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: statusColor,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                  ),
                 ),
-                child: Text(
-                  '${scan.confidencePercent}%',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: statusColor,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                      ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              // Source indicator icon
+                const SizedBox(height: 8),
+              ],
               _SourceIndicator(source: scan.source),
             ],
           ),
@@ -153,7 +146,10 @@ class _SourceIndicator extends StatelessWidget {
         ),
         const SizedBox(width: 4),
         Text(
-          isMobile ? 'Mobile' : 'Drone',
+          TranslationHelper.getLocalizedText(
+            context,
+            isMobile ? 'Mobile' : 'Drone',
+          ),
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 fontSize: 11,
                 fontWeight: FontWeight.w500,

@@ -56,6 +56,16 @@ class ScanSummary(BaseModel):
         description="English disease label from diagnosis when available (same as diagnose label).",
         examples=["Early blight"],
     )
+    is_healthy: bool = Field(
+        alias="isHealthy",
+        description="Whether the stored diagnosis marks the plant as healthy (false while pending).",
+        examples=[False],
+    )
+    confidence: Optional[float] = Field(
+        default=None,
+        description="Model confidence (0–1) when a diagnosis exists; omitted if pending or unknown.",
+        examples=[0.854],
+    )
 
 
 class MapMarkerItem(BaseModel):

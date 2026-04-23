@@ -17,8 +17,11 @@ MODEL_NAME = "llama-3.1-8b-instant"
 
 def _render_prompt(context: dict) -> str:
     template = PROMPT_PATH.read_text(encoding="utf-8")
+    disease_en = str(context.get("disease_name", "Unknown"))
+    disease_ar = str(context.get("disease_name_ar") or disease_en).strip() or disease_en
     return (
-        template.replace("{{disease_name}}", str(context.get("disease_name", "Unknown")))
+        template.replace("{{disease_name}}", disease_en)
+        .replace("{{disease_name_ar}}", disease_ar)
         .replace("{{severity}}", str(context.get("severity", "low")))
         .replace("{{crop_type}}", str(context.get("crop_type", "Unknown")))
         .replace("{{growth_stage}}", str(context.get("growth_stage", "Unknown")))
@@ -50,8 +53,14 @@ def _call_groq(prompt: str, disease_name: str) -> str:
             {
                 "role": "system",
                 "content": (
-                    "You are a Saudi agricultural expert. Return only valid JSON with "
-                    "exactly: treatmentText and treatmentTextAr."
+                    "You are a professional Saudi agricultural expert. Return only valid JSON "
+                    "with exactly: treatmentText and treatmentTextAr. In treatmentTextAr, use "
+                    "only the Arabic disease name given in the user prompt—never the English "
+                    "technical name. YOU MUST NEVER USE THE WORD \"ميلديو\" OR \"Mildiou\". "
+                    'IF THE DISEASE IS "Tomato_Mildiou", ALWAYS CALL IT "البياض الزغبي" IN THE '
+                    "ARABIC TEXT. THIS IS A HARD REQUIREMENT. "
+                    "CRITICAL: If you use the word \"ميلديو\", the response will be rejected. "
+                    'You MUST use "البياض الزغبي" only.'
                 ),
             },
             {"role": "user", "content": prompt},

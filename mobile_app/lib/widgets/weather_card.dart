@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:muzhir/l10n/app_localizations.dart';
 import 'package:muzhir/theme/app_theme.dart';
 
 /// Weather summary card with mock data for Saudi Arabia.
@@ -10,6 +11,7 @@ class WeatherCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -70,7 +72,7 @@ class WeatherCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      'Jeddah, Saudi Arabia',
+                      l10n.jeddahSaudiArabia,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: MuzhirColors.white.withValues(alpha: 0.92),
                           ),
@@ -78,18 +80,18 @@ class WeatherCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 12),
-                const Row(
+                Row(
                   children: [
                     _WeatherDetail(
                       icon: Icons.water_drop_outlined,
                       value: '45%',
-                      label: 'Humidity',
+                      label: l10n.humidity,
                     ),
-                    SizedBox(width: 16),
+                    const SizedBox(width: 16),
                     _WeatherDetail(
                       icon: Icons.air,
                       value: '12 km/h',
-                      label: 'Wind',
+                      label: l10n.wind,
                     ),
                   ],
                 ),

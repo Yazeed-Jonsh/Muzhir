@@ -1,113 +1,75 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:dio/dio.dart';
 import 'package:muzhir/core/api/api_service.dart';
+import 'package:muzhir/core/utils/network_url_helper.dart';
+import 'package:muzhir/core/utils/translation_helper.dart';
+import 'package:muzhir/l10n/app_localizations.dart';
 import 'package:muzhir/models/scan_history_item.dart';
+import 'package:muzhir/providers/scan_history_provider.dart';
 import 'package:muzhir/screens/farmer/diagnosis_result_detail_screen.dart';
 import 'package:muzhir/theme/app_theme.dart';
 
 /// Scan history backed by `GET /api/v1/history` (authenticated user only).
-class HistoryPage extends StatefulWidget {
+class HistoryPage extends ConsumerStatefulWidget {
   const HistoryPage({super.key, this.onScanDeleted});
 
   final VoidCallback? onScanDeleted;
 
   @override
-  State<HistoryPage> createState() => _HistoryPageState();
+  ConsumerState<HistoryPage> createState() => _HistoryPageState();
 }
 
-class _HistoryPageState extends State<HistoryPage> {
-  bool _loading = true;
-  String? _error;
-  List<ScanHistoryItem> _items = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadHistory();
-  }
-
+class _HistoryPageState extends ConsumerState<HistoryPage> {
   Future<void> _loadHistory() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final list = await ApiService().getScanHistory();
-      if (!mounted) return;
-      setState(() {
-        _items = list;
-        _loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _error = e.toString();
-      });
-    }
+    ref.invalidate(scanHistoryProvider);
+    await ref.read(scanHistoryProvider.future);
   }
 
-  String _diagnosisLabel(ScanHistoryItem item) {
+  String _diagnosisLabel(ScanHistoryItem item, AppLocalizations l10n) {
     final name = item.diseaseName?.trim();
     if (name != null && name.isNotEmpty) return name;
     if (item.status == 'pending' || item.status == 'processing') {
-      return 'Analysis in progress';
+      return l10n.analysisInProgress;
     }
-    return 'No diagnosis yet';
+    return l10n.noDiagnosisYet;
   }
 
-  String _relativeTimestamp(DateTime t) {
-    final now = DateTime.now();
-    final d = now.difference(t);
-    if (d.isNegative) return 'Just now';
-    if (d.inSeconds < 45) return 'Just now';
-    if (d.inMinutes < 60) return '${d.inMinutes} min ago';
-    if (d.inHours < 24) return '${d.inHours} hours ago';
-    if (d.inDays < 7) return '${d.inDays} days ago';
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    return '${months[t.month - 1]} ${t.day}, ${t.year}';
+  String _relativeTimestamp(DateTime t, AppLocalizations l10n) {
+    return TranslationHelper.relativeScanTimeLabel(context, t, l10n);
   }
 
-  bool _isHealthyLabel(String label) {
-    final l = label.toLowerCase();
-    return l.contains('healthy') ||
-        l.contains('no disease') ||
-        l.contains('no disease detected');
-  }
-
-  String _messageFromDioException(DioException e) {
+  String _messageFromDioException(DioException e, AppLocalizations l10n) {
     final data = e.response?.data;
     if (data is Map && data['detail'] != null) {
       final d = data['detail'];
       if (d is String) return d;
       if (d is List && d.isNotEmpty) return d.first.toString();
     }
-    return e.message ?? 'Could not load scan details.';
+    return e.message ?? l10n.couldNotLoadScan;
   }
 
   Future<bool> _confirmDeleteScan(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
           title: Text(
-            'Delete scan',
+            l10n.deleteScan,
             style: GoogleFonts.lexend(fontWeight: FontWeight.w700),
           ),
           content: Text(
-            'Are you sure you want to delete this scan?',
+            l10n.deleteScanConfirm,
             style: GoogleFonts.lexend(fontWeight: FontWeight.w500),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
               child: Text(
-                'Cancel',
+                l10n.cancel,
                 style: GoogleFonts.lexend(
                   fontWeight: FontWeight.w600,
                   color: MuzhirColors.mutedGrey,
@@ -121,7 +83,7 @@ class _HistoryPageState extends State<HistoryPage> {
                 foregroundColor: MuzhirColors.cardWhite,
               ),
               child: Text(
-                'Delete',
+                l10n.delete,
                 style: GoogleFonts.lexend(fontWeight: FontWeight.w700),
               ),
             ),
@@ -136,6 +98,7 @@ class _HistoryPageState extends State<HistoryPage> {
     BuildContext context,
     ScanHistoryItem item,
   ) async {
+    final l10n = AppLocalizations.of(context)!;
     final shouldDelete = await _confirmDeleteScan(context);
     if (!shouldDelete) return false;
 
@@ -146,10 +109,10 @@ class _HistoryPageState extends State<HistoryPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
+          margin: const EdgeInsetsDirectional.all(16),
           backgroundColor: MuzhirColors.earthyClayRed,
           content: Text(
-            _messageFromDioException(e),
+            _messageFromDioException(e, l10n),
             style: GoogleFonts.lexend(
               color: MuzhirColors.cardWhite,
               fontSize: 14,
@@ -164,10 +127,10 @@ class _HistoryPageState extends State<HistoryPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
+          margin: const EdgeInsetsDirectional.all(16),
           backgroundColor: MuzhirColors.earthyClayRed,
           content: Text(
-            'Could not delete scan: $e',
+            l10n.couldNotDeleteScan(e.toString()),
             style: GoogleFonts.lexend(
               color: MuzhirColors.cardWhite,
               fontSize: 14,
@@ -180,17 +143,17 @@ class _HistoryPageState extends State<HistoryPage> {
     }
 
     if (!context.mounted) return false;
-    setState(() {
-      _items.removeWhere((s) => s.scanId == item.scanId);
-    });
+    ref.invalidate(scanHistoryProvider);
+    await ref.read(scanHistoryProvider.future);
+    if (!context.mounted) return false;
     widget.onScanDeleted?.call();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(16),
+        margin: const EdgeInsetsDirectional.all(16),
         backgroundColor: MuzhirColors.forestGreen,
         content: Text(
-          'Scan removed successfully',
+          l10n.scanRemovedSuccessfully,
           style: GoogleFonts.lexend(
             color: MuzhirColors.cardWhite,
             fontSize: 14,
@@ -207,6 +170,8 @@ class _HistoryPageState extends State<HistoryPage> {
     ScanHistoryItem item,
   ) async {
     final navigator = Navigator.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final isAr = Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -225,22 +190,22 @@ class _HistoryPageState extends State<HistoryPage> {
         MaterialPageRoute<bool>(
           builder: (_) => DiagnosisResultDetailScreen(
             diagnosis: diagnosis,
-            cropType: item.cropName,
+            cropType: isAr ? item.cropNameAr : item.cropName,
           ),
         ),
       );
       if (!context.mounted || deleted != true) return;
-      setState(() {
-        _items.removeWhere((s) => s.scanId == item.scanId);
-      });
+      ref.invalidate(scanHistoryProvider);
+      await ref.read(scanHistoryProvider.future);
+      if (!context.mounted) return;
       widget.onScanDeleted?.call();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
+          margin: const EdgeInsetsDirectional.all(16),
           backgroundColor: MuzhirColors.forestGreen,
           content: Text(
-            'Scan removed successfully',
+            l10n.scanRemovedSuccessfully,
             style: GoogleFonts.lexend(
               color: MuzhirColors.cardWhite,
               fontSize: 14,
@@ -255,10 +220,10 @@ class _HistoryPageState extends State<HistoryPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(16),
+            margin: const EdgeInsetsDirectional.all(16),
             backgroundColor: MuzhirColors.earthyClayRed,
             content: Text(
-              _messageFromDioException(e),
+              _messageFromDioException(e, l10n),
               style: GoogleFonts.lexend(
                 color: MuzhirColors.cardWhite,
                 fontSize: 14,
@@ -274,10 +239,10 @@ class _HistoryPageState extends State<HistoryPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(16),
+            margin: const EdgeInsetsDirectional.all(16),
             backgroundColor: MuzhirColors.earthyClayRed,
             content: Text(
-              'Could not open scan: $e',
+              l10n.couldNotOpenScan(e.toString()),
               style: GoogleFonts.lexend(
                 color: MuzhirColors.cardWhite,
                 fontSize: 14,
@@ -292,70 +257,78 @@ class _HistoryPageState extends State<HistoryPage> {
 
   @override
   Widget build(BuildContext context) {
+    final historyAsync = ref.watch(scanHistoryProvider);
+    final l10n = AppLocalizations.of(context)!;
+    final isAr = Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     return ColoredBox(
       color: MuzhirColors.creamScaffold,
-      child: _loading
-          ? Center(
-              child: CircularProgressIndicator(
-                strokeWidth: 2.5,
-                color: MuzhirColors.forestGreen.withValues(alpha: 0.85),
+      child: historyAsync.when(
+        loading: () => Center(
+          child: CircularProgressIndicator(
+            strokeWidth: 2.5,
+            color: MuzhirColors.forestGreen.withValues(alpha: 0.85),
+          ),
+        ),
+        error: (e, _) => _buildErrorState(context, e.toString()),
+        data: (items) {
+          if (items.isEmpty) {
+            return _buildEmptyState(context);
+          }
+          return RefreshIndicator(
+            color: MuzhirColors.forestGreen,
+            onRefresh: _loadHistory,
+            child: ListView.builder(
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
               ),
-            )
-          : _error != null
-              ? _buildErrorState(context)
-              : _items.isEmpty
-                  ? _buildEmptyState(context)
-                  : RefreshIndicator(
-                      color: MuzhirColors.forestGreen,
-                      onRefresh: _loadHistory,
-                      child: ListView.builder(
-                        physics: const AlwaysScrollableScrollPhysics(
-                          parent: BouncingScrollPhysics(),
-                        ),
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-                        itemCount: _items.length,
-                        itemBuilder: (context, index) {
-                          final item = _items[index];
-                          final label = _diagnosisLabel(item);
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
-                            child: Dismissible(
-                              key: ValueKey<String>(item.scanId),
-                              direction: DismissDirection.endToStart,
-                              background: Container(
-                                decoration: BoxDecoration(
-                                  color: MuzhirColors.earthyClayRed,
-                                  borderRadius: BorderRadius.circular(18),
-                                ),
-                                alignment: Alignment.centerRight,
-                                padding: const EdgeInsets.symmetric(horizontal: 22),
-                                child: const Icon(
-                                  Icons.delete_rounded,
-                                  color: Colors.white,
-                                  size: 28,
-                                ),
-                              ),
-                              confirmDismiss: (_) =>
-                                  _deleteScanFromHistory(context, item),
-                              child: _HistoryListTile(
-                                item: item,
-                                diagnosisLabel: label,
-                                timeLabel: _relativeTimestamp(item.createdAt),
-                                isHealthy: _isHealthyLabel(label),
-                                onTap: () => _openDiagnosisDetail(context, item),
-                              ),
-                            ),
-                          );
-                        },
+              padding: const EdgeInsetsDirectional.fromSTEB(16, 12, 16, 100),
+              itemCount: items.length,
+              itemBuilder: (context, index) {
+                final item = items[index];
+                final label = _diagnosisLabel(item, l10n);
+                return Padding(
+                  padding: const EdgeInsetsDirectional.only(bottom: 16),
+                  child: Dismissible(
+                    key: ValueKey<String>(item.scanId),
+                    direction: DismissDirection.endToStart,
+                    background: Container(
+                      decoration: BoxDecoration(
+                        color: MuzhirColors.earthyClayRed,
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      alignment: AlignmentDirectional.centerEnd,
+                      padding: const EdgeInsetsDirectional.symmetric(horizontal: 22),
+                      child: const Icon(
+                        Icons.delete_rounded,
+                        color: Colors.white,
+                        size: 28,
                       ),
                     ),
+                    confirmDismiss: (_) => _deleteScanFromHistory(context, item),
+                    child: _HistoryListTile(
+                      item: item,
+                      cropName: isAr ? item.cropNameAr : item.cropName,
+                      diagnosisLabel: label,
+                      timeLabel: _relativeTimestamp(item.createdAt, l10n),
+                      confidencePercent: item.confidencePercentDisplay,
+                      isHealthy: item.isHealthy,
+                      onTap: () => _openDiagnosisDetail(context, item),
+                    ),
+                  ),
+                );
+              },
+            ),
+          );
+        },
+      ),
     );
   }
 
-  Widget _buildErrorState(BuildContext context) {
+  Widget _buildErrorState(BuildContext context, String errorMessage) {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsetsDirectional.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -366,7 +339,7 @@ class _HistoryPageState extends State<HistoryPage> {
             ),
             const SizedBox(height: 16),
             Text(
-              'Could not load history',
+              l10n.couldNotLoadHistory,
               textAlign: TextAlign.center,
               style: GoogleFonts.lexend(
                 fontSize: 18,
@@ -376,7 +349,7 @@ class _HistoryPageState extends State<HistoryPage> {
             ),
             const SizedBox(height: 8),
             Text(
-              _error!,
+              errorMessage,
               textAlign: TextAlign.center,
               style: GoogleFonts.lexend(
                 fontSize: 13,
@@ -390,13 +363,16 @@ class _HistoryPageState extends State<HistoryPage> {
               onPressed: _loadHistory,
               icon: const Icon(Icons.refresh_rounded, size: 20),
               label: Text(
-                'Retry',
+                l10n.retry,
                 style: GoogleFonts.lexend(fontWeight: FontWeight.w700),
               ),
               style: FilledButton.styleFrom(
                 backgroundColor: MuzhirColors.forestGreen,
                 foregroundColor: MuzhirColors.cardWhite,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding: const EdgeInsetsDirectional.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
@@ -409,9 +385,10 @@ class _HistoryPageState extends State<HistoryPage> {
   }
 
   Widget _buildEmptyState(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsetsDirectional.all(32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -422,7 +399,7 @@ class _HistoryPageState extends State<HistoryPage> {
             ),
             const SizedBox(height: 20),
             Text(
-              'No scan history yet',
+              l10n.noScanHistoryYet,
               textAlign: TextAlign.center,
               style: GoogleFonts.lexend(
                 fontSize: 20,
@@ -432,7 +409,7 @@ class _HistoryPageState extends State<HistoryPage> {
             ),
             const SizedBox(height: 10),
             Text(
-              'Your completed diagnoses will show up here. Open the Diagnose tab to analyze a plant.',
+              l10n.historyEmptyDescription,
               textAlign: TextAlign.center,
               style: GoogleFonts.lexend(
                 fontSize: 14,
@@ -451,15 +428,20 @@ class _HistoryPageState extends State<HistoryPage> {
 class _HistoryListTile extends StatelessWidget {
   const _HistoryListTile({
     required this.item,
+    required this.cropName,
     required this.diagnosisLabel,
     required this.timeLabel,
+    this.confidencePercent,
     required this.isHealthy,
     required this.onTap,
   });
 
   final ScanHistoryItem item;
+  final String cropName;
   final String diagnosisLabel;
   final String timeLabel;
+  /// Whole percent from API; null hides the badge.
+  final int? confidencePercent;
   final bool isHealthy;
   final VoidCallback onTap;
 
@@ -468,7 +450,7 @@ class _HistoryListTile extends StatelessWidget {
     final statusColor = isHealthy
         ? MuzhirColors.coreLeafGreen
         : MuzhirColors.infectionSeriousOrange;
-    final url = item.imageUrl.trim();
+    final url = NetworkUrlHelper.normalizeRemoteUrl(item.imageUrl);
 
     return Material(
       color: Colors.transparent,
@@ -476,7 +458,7 @@ class _HistoryListTile extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(18),
         child: Ink(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsetsDirectional.all(14),
           decoration: BoxDecoration(
             color: MuzhirColors.cardWhite,
             borderRadius: BorderRadius.circular(18),
@@ -524,15 +506,20 @@ class _HistoryListTile extends StatelessWidget {
                               ),
                             ),
                           ),
-                          errorWidget: (_, __, ___) => ColoredBox(
-                            color: MuzhirColors.weatherIconCircle
-                                .withValues(alpha: 0.65),
-                            child: const Icon(
-                              Icons.broken_image_outlined,
-                              color: MuzhirColors.mutedGrey,
-                              size: 26,
-                            ),
-                          ),
+                          errorWidget: (_, imageUrl, error) {
+                            debugPrint(
+                              '[IMG_ERR] HistoryPage | $imageUrl | $error',
+                            );
+                            return ColoredBox(
+                              color: MuzhirColors.weatherIconCircle
+                                  .withValues(alpha: 0.65),
+                              child: const Icon(
+                                Icons.broken_image_outlined,
+                                color: MuzhirColors.mutedGrey,
+                                size: 26,
+                              ),
+                            );
+                          },
                         ),
                 ),
               ),
@@ -542,7 +529,7 @@ class _HistoryListTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      item.cropName,
+                      TranslationHelper.getLocalizedText(context, cropName),
                       style: GoogleFonts.lexend(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
@@ -551,7 +538,7 @@ class _HistoryListTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      diagnosisLabel,
+                      TranslationHelper.getLocalizedText(context, diagnosisLabel),
                       style: GoogleFonts.lexend(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
@@ -570,6 +557,25 @@ class _HistoryListTile extends StatelessWidget {
                   ],
                 ),
               ),
+              if (confidencePercent != null) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '$confidencePercent%',
+                    style: GoogleFonts.lexend(
+                      color: statusColor,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(width: 8),
               const Icon(
                 Icons.chevron_right_rounded,

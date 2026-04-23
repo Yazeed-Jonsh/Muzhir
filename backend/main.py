@@ -415,8 +415,12 @@ async def diagnose(
                     disease_snapshot = class_mapper.get_disease_snapshot_by_en_name(yolo_name)
 
                 disease_name_en = str(disease_snapshot["diseaseName"])
+                disease_name_ar = str(
+                    disease_snapshot.get("diseaseNameAr") or disease_name_en
+                )
                 context = {
                     "disease_name": disease_name_en,
+                    "disease_name_ar": disease_name_ar,
                     "severity": severity_label,
                     "crop_type": normalized_crop_id,
                     "growth_stage": normalized_growth_stage_id,
@@ -737,6 +741,17 @@ async def get_history(
         else:
             disease_name_value = str(disease_name_raw).strip()
 
+        status_str = str(status_value).lower() if status_value else ""
+        if status_str in ("pending", "processing"):
+            is_healthy_value = False
+            confidence_value: float | None = None
+        else:
+            disease_label_for_health = (
+                disease_name_value if disease_name_value else "No disease detected"
+            )
+            is_healthy_value = _scan_is_healthy_row(data, str(disease_label_for_health))
+            confidence_value = _history_row_confidence(data, diagnosis, disease)
+
         history.append(
             ScanSummary(
                 scan_id=str(data.get("scanId") or doc.id),
@@ -747,6 +762,8 @@ async def get_history(
                 severity=severity_value,
                 image_url=str(image_url),
                 disease_name=disease_name_value,
+                is_healthy=is_healthy_value,
+                confidence=confidence_value,
             )
         )
         if len(history) >= limit:
@@ -769,6 +786,28 @@ def _scan_is_healthy_row(data: dict, disease_label: str) -> bool:
         return True
     dl = disease_label.lower()
     return "healthy" in dl or "no disease" in dl
+
+
+def _history_row_confidence(data: dict, diagnosis: dict, disease: dict) -> float | None:
+    """Return model confidence in [0, 1], or None if not stored."""
+    raw = (
+        data.get("confidence_score")
+        or diagnosis.get("confidenceScore")
+        or diagnosis.get("confidence_score")
+        or disease.get("confidenceScore")
+        or disease.get("confidence_score")
+    )
+    if raw is None:
+        return None
+    try:
+        v = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if 1.0 < v <= 100.0:
+        v = v / 100.0
+    if v < 0.0 or v > 1.0:
+        return None
+    return v
 
 
 @app.get(

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:muzhir/core/config/env_config.dart';
 import 'package:geolocator/geolocator.dart';
 
 import 'package:muzhir/models/diagnosis_response.dart';
@@ -9,11 +10,16 @@ import 'package:muzhir/models/scan_history_item.dart';
 
 /// HTTP client for the Muzhir backend with Firebase Bearer auth and debug logging.
 class ApiService {
-  ApiService({FirebaseAuth? firebaseAuth})
+  factory ApiService({FirebaseAuth? firebaseAuth}) {
+    _instance ??= ApiService._internal(firebaseAuth: firebaseAuth);
+    return _instance!;
+  }
+
+  ApiService._internal({FirebaseAuth? firebaseAuth})
       : _auth = firebaseAuth ?? FirebaseAuth.instance {
     _dio = Dio(
       BaseOptions(
-        baseUrl: 'http://10.0.2.2:8000/api/v1',
+        baseUrl: EnvConfig.backendApiV1BaseUrl,
         connectTimeout: const Duration(seconds: 30),
         receiveTimeout: const Duration(seconds: 30),
         headers: const {'Accept': 'application/json'},
@@ -25,6 +31,7 @@ class ApiService {
     ]);
   }
 
+  static ApiService? _instance;
   final FirebaseAuth _auth;
   late final Dio _dio;
 
@@ -55,6 +62,12 @@ class ApiService {
     String? cropId,
     String? growthStageId,
   }) async {
+    // Multipart bodies (FormData) are single-use streams; refresh token first to
+    // reduce the chance of interceptor-level 401 retry on a finalized body.
+    try {
+      await _auth.currentUser?.getIdToken(true);
+    } catch (_) {}
+
     double? captureLatitude;
     double? captureLongitude;
     try {
@@ -226,6 +239,61 @@ class ApiService {
       );
     }
   }
+
+  /// Multipart `POST /profile-photo`.
+  ///
+  /// Uploads the signed-in user's profile picture and returns the new URL from
+  /// response fields (`profileImageUrl` or `imageUrl`).
+  Future<String> uploadProfilePicture(File imageFile) async {
+    // Multipart bodies cannot be replayed once sent; refresh token before building
+    // FormData so we avoid 401-triggered automatic retry for uploads.
+    try {
+      await _auth.currentUser?.getIdToken(true);
+    } catch (_) {}
+
+    final filename = imageFile.uri.pathSegments.isNotEmpty
+        ? imageFile.uri.pathSegments.last
+        : 'profile.jpg';
+    final formData = FormData.fromMap({
+      'image': await MultipartFile.fromFile(
+        imageFile.path,
+        filename: filename,
+      ),
+    });
+
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/profile-photo',
+      data: formData,
+      options: Options(
+        sendTimeout: const Duration(minutes: 2),
+        receiveTimeout: const Duration(minutes: 2),
+      ),
+    );
+
+    final data = response.data;
+    if (data == null) {
+      throw DioException(
+        requestOptions: response.requestOptions,
+        response: response,
+        message: 'Profile upload response body was empty',
+        type: DioExceptionType.badResponse,
+      );
+    }
+
+    final url =
+        (data['profileImageUrl'] ?? data['imageUrl'] ?? '').toString().trim();
+    if (url.isEmpty) {
+      throw const FormatException(
+        'uploadProfilePicture: missing profileImageUrl/imageUrl in response.',
+      );
+    }
+    return url;
+  }
+
+  /// `DELETE /profile-photo`.
+  Future<void> removeProfilePicture() async {
+    await _dio.delete<void>('/profile-photo');
+  }
 }
 
 class _AuthInterceptor extends Interceptor {
@@ -266,8 +334,16 @@ class _AuthInterceptor extends Interceptor {
   ) async {
     final status = err.response?.statusCode;
     final opts = err.requestOptions;
+    final isMultipart = opts.data is FormData;
 
     if (status != 401 || opts.extra[_kExtra401Retried] == true) {
+      handler.next(err);
+      return;
+    }
+
+    // FormData streams are finalized after first send; retrying with `fetch(opts)`
+    // would throw "The FormData has already been finalized".
+    if (isMultipart) {
       handler.next(err);
       return;
     }

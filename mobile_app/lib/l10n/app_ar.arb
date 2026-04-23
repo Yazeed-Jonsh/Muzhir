@@ -1,0 +1,194 @@
+{
+  "@@locale": "ar",
+  "appTitle": "مزهر",
+  "home": "الرئيسية",
+  "diagnose": "تشخيص",
+  "map": "الخريطة",
+  "history": "السجل",
+  "diseaseMap": "خريطة الأمراض",
+  "scanHistory": "سجل الفحوصات",
+  "recentDiagnosis": "أحدث التشخيصات",
+  "viewAll": "عرض الكل",
+  "languageToggleLabel": "AR/EN",
+  "languageChangedToEnglish": "تم تغيير اللغة إلى الإنجليزية",
+  "languageChangedToArabic": "تم تغيير اللغة إلى العربية",
+  "analysisInProgress": "التحليل قيد التنفيذ",
+  "noDiagnosisYet": "لا يوجد تشخيص بعد",
+  "justNow": "الآن",
+  "minutesAgo": "منذ {minutes} دقيقة",
+  "@minutesAgo": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "hoursAgo": "منذ {hours} ساعة",
+  "@hoursAgo": {
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "daysAgo": "منذ {days} يوم",
+  "@daysAgo": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "diagnoseYourPlant": "شخّص نبتتك",
+  "diagnoseHeaderDescription": "قم برفع أو التقاط صورة للنبتة لاكتشاف الأمراض باستخدام محرك التحليل النباتي الذكي.",
+  "tapToUploadOrCaptureImage": "اضغط لرفع الصورة أو التقاطها",
+  "supportsJpgPng": "يدعم JPG وPNG حتى 10 ميجابايت",
+  "captureTip": "تأكد أن الورقة واضحة وإضاءتها جيدة للحصول على أفضل نتيجة",
+  "quickCapture": "التقاط سريع",
+  "camera": "الكاميرا",
+  "gallery": "المعرض",
+  "mobile": "الهاتف",
+  "drone": "الدرون",
+  "selectedVia": "تم الاختيار عبر: {source}",
+  "@selectedVia": {
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "analyzePlant": "تحليل النبتة",
+  "pleaseSelectImage": "يرجى اختيار صورة لتفعيل التحليل",
+  "scanAnother": "فحص صورة أخرى",
+  "getTreatmentAdvice": "عرض نصائح العلاج",
+  "hideTreatmentAdvice": "إخفاء نصائح العلاج",
+  "healthyNoTreatment": "نبتتك بصحة جيدة! لا حاجة للعلاج.",
+  "noRecentScans": "لا توجد فحوصات حديثة بعد. شغّل تحليلاً بالأعلى لترى النتائج هنا.",
+  "scanRemovedSuccessfully": "تم حذف الفحص بنجاح",
+  "couldNotOpenScan": "تعذر فتح الفحص: {error}",
+  "@couldNotOpenScan": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "analysisFailed": "فشل التحليل: {error}",
+  "@analysisFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "couldNotDeleteScan": "تعذر حذف الفحص: {error}",
+  "@couldNotDeleteScan": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "couldNotLoadHistory": "تعذر تحميل السجل",
+  "retry": "إعادة المحاولة",
+  "noScanHistoryYet": "لا يوجد سجل فحوصات بعد",
+  "historyEmptyDescription": "ستظهر تشخيصاتك المكتملة هنا. افتح تبويب التشخيص لتحليل نبتة.",
+  "deleteScan": "حذف الفحص",
+  "deleteScanConfirm": "هل أنت متأكد أنك تريد حذف هذا الفحص؟",
+  "cancel": "إلغاء",
+  "delete": "حذف",
+  "diagnosis": "التشخيص",
+  "deleteScanTooltip": "حذف الفحص",
+  "couldNotLoadScan": "تعذر تحميل الفحص.",
+  "noDiagnosisData": "لا توجد بيانات تشخيص.",
+  "diagnosisResult": "نتيجة التشخيص",
+  "crop": "المحصول",
+  "labelCropType": "نوع المحصول",
+  "labelCropName": "اسم المحصول",
+  "selectCropTypeHint": "اختر نوع المحصول",
+  "disease": "المرض",
+  "confidence": "الثقة",
+  "source": "المصدر",
+  "location": "الموقع",
+  "treatmentAdvice": "نصائح العلاج",
+  "close": "إغلاق",
+  "recommendation": "التوصية",
+  "recommendationUnavailable": "لا توجد توصية متاحة.",
+  "goodMorning": "صباح الخير",
+  "goodAfternoon": "مساء الخير",
+  "goodEvening": "مساء الخير",
+  "farmer": "مزارع",
+  "diseased": "مصاب",
+  "healthy": "سليم",
+  "totalScans": "إجمالي الفحوصات",
+  "jeddahSaudiArabia": "جدة، المملكة العربية السعودية",
+  "wind": "الرياح",
+  "humidity": "الرطوبة",
+  "recentScans": "الفحوصات الأخيرة",
+  "yesterday": "أمس",
+  "all": "الكل",
+  "tomato": "طماطم",
+  "corn": "ذرة",
+  "wheat": "قمح",
+  "couldNotLoadMapMarkers": "تعذر تحميل علامات الخريطة.",
+  "couldNotOpenMaps": "تعذر فتح الخرائط.",
+  "loadingFieldScans": "جاري تحميل فحوصات الحقول…",
+  "findingYourLocation": "جاري تحديد موقعك…",
+  "showAllMarkers": "إظهار جميع العلامات",
+  "myLocation": "موقعي",
+  "unhealthy": "غير سليم",
+  "scanDetails": "تفاصيل الفحص",
+  "healthStatus": "الحالة الصحية",
+  "cropType": "نوع المحصول",
+  "timestamp": "الوقت",
+  "coordinates": "الإحداثيات",
+  "viewDetails": "عرض التفاصيل",
+  "navigate": "تنقل",
+  "account": "الحساب",
+  "language": "اللغة",
+  "role": "الدور",
+  "roleFarmer": "مزارع",
+  "roleMember": "عضو",
+  "memberSince": "عضو منذ",
+  "settingsAndActions": "الإعدادات والإجراءات",
+  "backendHealthOk": "نجح فحص صحة الخادم.",
+  "backendHealthFailed": "الخادم غير متاح أو غير سليم. راجع السجل لمزيد من التفاصيل.",
+  "testBackendConnection": "اختبار اتصال الخادم",
+  "signOut": "تسجيل الخروج",
+  "authWelcomeBack": "مرحباً بعودتك",
+  "authSignInSubtitle": "سجّل الدخول لإدارة مزرعتك برؤى مدعومة بالذكاء الاصطناعي.",
+  "authEmailAddress": "البريد الإلكتروني",
+  "authPassword": "كلمة المرور",
+  "authHintEmail": "بريدك@example.com",
+  "authHintPassword": "أدخل كلمة المرور",
+  "authEmailRequired": "البريد الإلكتروني مطلوب",
+  "authEmailInvalid": "أدخل بريداً إلكترونياً صالحاً",
+  "authPasswordRequired": "كلمة المرور مطلوبة",
+  "authShowPassword": "إظهار كلمة المرور",
+  "authHidePassword": "إخفاء كلمة المرور",
+  "authForgotPassword": "نسيت كلمة المرور؟",
+  "authLogin": "تسجيل الدخول",
+  "authSignedInSuccessfully": "تم تسجيل الدخول بنجاح",
+  "authEnterEmailFirst": "يرجى إدخال بريدك الإلكتروني أولاً",
+  "authPasswordResetSent": "تم إرسال رسالة إعادة تعيين كلمة المرور!",
+  "authDontHaveAccount": "ليس لديك حساب؟ ",
+  "authSignUp": "إنشاء حساب",
+  "authCreateAccount": "إنشاء حساب",
+  "authCreateAccountSubtitle": "ابدأ بحماية نباتاتك من أمراض النبات باستخدام الكشف المدعوم بالذكاء الاصطناعي.",
+  "authFullName": "الاسم الكامل",
+  "authHintYourName": "اسمك",
+  "authFullNameRequired": "أدخل اسمك",
+  "authHintPasswordMin": "6 أحرف على الأقل",
+  "authPasswordRequiredSignup": "أدخل كلمة مرور",
+  "authPasswordTooShort": "يجب أن تكون كلمة المرور 6 أحرف على الأقل",
+  "authAccountCreated": "تم إنشاء الحساب بنجاح",
+  "authWeakPassword": "كلمة المرور ضعيفة. استخدم 6 أحرف على الأقل.",
+  "authEmailAlreadyInUse": "يوجد حساب مرتبط بهذا البريد الإلكتروني.",
+  "authTermsIntro": "بالتسجيل، أنت توافق على ",
+  "authTermsOfService": "شروط الخدمة",
+  "authTermsAnd": " و",
+  "authPrivacyPolicy": "سياسة الخصوصية",
+  "authTermsOutro": ".",
+  "authAlreadyHaveAccount": "لديك حساب بالفعل؟ ",
+  "authLogIn": "تسجيل الدخول"
+}

@@ -1,44 +1,36 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:muzhir/core/api/api_service.dart';
+import 'package:muzhir/core/utils/translation_helper.dart';
+import 'package:muzhir/l10n/app_localizations.dart';
 import 'package:muzhir/models/diagnosis_response.dart';
+import 'package:muzhir/providers/scan_history_provider.dart';
 import 'package:muzhir/screens/farmer/diagnosis_result_detail_screen.dart';
 import 'package:muzhir/theme/app_theme.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-/// One chip in the map crop filter row ([cropId] is the backend `crop` query; null = all crops).
-class _MapCropTab {
-  const _MapCropTab({required this.label, this.cropId});
-
-  final String label;
-  final String? cropId;
-}
-
-const List<_MapCropTab> _kMapCropTabs = <_MapCropTab>[
-  _MapCropTab(label: 'All', cropId: null),
-  _MapCropTab(label: 'Tomato', cropId: 'tomato'),
-  _MapCropTab(label: 'Corn', cropId: 'corn'),
-  _MapCropTab(label: 'Wheat', cropId: 'wheat'),
-];
+enum _MapHealthFilter { all, infected, healthy }
 
 /// Farmer Disease Map Page.
 /// Displays an OpenStreetMap view with markers from [ApiService.getMapMarkers]
 /// and the user's current position when available.
-class MapPage extends StatefulWidget {
+class MapPage extends ConsumerStatefulWidget {
   const MapPage({super.key, this.isTabVisible = false});
 
   /// When true, this tab is visible in the root [IndexedStack] (refresh location).
   final bool isTabVisible;
 
   @override
-  State<MapPage> createState() => _MapPageState();
+  ConsumerState<MapPage> createState() => _MapPageState();
 }
 
-class _MapPageState extends State<MapPage> {
+class _MapPageState extends ConsumerState<MapPage> {
   /// Fallback center (Jeddah) while GPS is loading or unavailable.
   static const LatLng _defaultCenter = LatLng(21.5433, 39.1728);
   static const double _initialZoom = 11.0;
@@ -54,7 +46,7 @@ class _MapPageState extends State<MapPage> {
   List<DiagnosisResponse> _scanMarkers = [];
   bool _markersLoading = true;
   String? _markersError;
-  int _selectedCropTabIndex = 0;
+  _MapHealthFilter _selectedHealthFilter = _MapHealthFilter.all;
 
   @override
   void initState() {
@@ -87,14 +79,13 @@ class _MapPageState extends State<MapPage> {
 
   Future<void> _loadMapMarkers() async {
     if (!mounted) return;
-    final crop = _kMapCropTabs[_selectedCropTabIndex].cropId;
     setState(() {
       _markersLoading = true;
       _markersError = null;
       _scanMarkers = [];
     });
     try {
-      final list = await ApiService().getMapMarkers(crop: crop);
+      final list = await ApiService().getMapMarkers();
       if (!mounted) return;
       setState(() {
         _scanMarkers = list;
@@ -119,22 +110,35 @@ class _MapPageState extends State<MapPage> {
   }
 
   String _messageFromDio(DioException e) {
+    final l10n = AppLocalizations.of(context)!;
     final data = e.response?.data;
     if (data is Map && data['detail'] != null) {
       final d = data['detail'];
       if (d is String) return d;
       if (d is List && d.isNotEmpty) return d.first.toString();
     }
-    return e.message ?? 'Could not load map markers.';
+    return e.message ?? l10n.couldNotLoadMapMarkers;
   }
 
-  void _onCropTabSelected(int index) {
-    if (index == _selectedCropTabIndex) return;
-    setState(() => _selectedCropTabIndex = index);
-    _loadMapMarkers();
+  void _onHealthFilterSelected(_MapHealthFilter filter) {
+    if (filter == _selectedHealthFilter) return;
+    setState(() => _selectedHealthFilter = filter);
   }
 
-  Widget _buildCropFilterBar() {
+  String _healthFilterLabel(_MapHealthFilter filter, AppLocalizations l10n) {
+    switch (filter) {
+      case _MapHealthFilter.infected:
+        return l10n.diseased;
+      case _MapHealthFilter.healthy:
+        return l10n.healthy;
+      case _MapHealthFilter.all:
+        return l10n.all;
+    }
+  }
+
+  Widget _buildHealthFilterBar() {
+    final l10n = AppLocalizations.of(context)!;
+    const filters = _MapHealthFilter.values;
     return Material(
       color: MuzhirColors.creamScaffold,
       elevation: 1,
@@ -144,17 +148,17 @@ class _MapPageState extends State<MapPage> {
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          itemCount: _kMapCropTabs.length,
+          itemCount: filters.length,
           separatorBuilder: (_, __) => const SizedBox(width: 8),
           itemBuilder: (context, i) {
-            final tab = _kMapCropTabs[i];
-            final selected = i == _selectedCropTabIndex;
+            final filter = filters[i];
+            final selected = filter == _selectedHealthFilter;
             return ChoiceChip(
-              label: Text(tab.label),
+              label: Text(_healthFilterLabel(filter, l10n)),
               selected: selected,
               showCheckmark: false,
               onSelected: (value) {
-                if (value) _onCropTabSelected(i);
+                if (value) _onHealthFilterSelected(filter);
               },
               selectedColor: MuzhirColors.forestGreen,
               backgroundColor: MuzhirColors.cardWhite,
@@ -168,7 +172,8 @@ class _MapPageState extends State<MapPage> {
                 fontWeight: FontWeight.w600,
                 fontSize: 14,
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
             );
           },
         ),
@@ -251,10 +256,11 @@ class _MapPageState extends State<MapPage> {
   }
 
   /// Fits all scan pins in view (with padding for FAB / chrome).
-  void _fitAllMarkersVisible() {
+  void _fitAllMarkersVisible([List<DiagnosisResponse>? markers]) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final points = _scanMarkers
+      final source = markers ?? _scanMarkers;
+      final points = source
           .where((d) => d.latitude != null && d.longitude != null)
           .map((d) => LatLng(d.latitude!, d.longitude!))
           .toList();
@@ -286,12 +292,12 @@ class _MapPageState extends State<MapPage> {
   String _formatMarkerTimestamp(DateTime? t) {
     if (t == null) return '—';
     final d = t.toLocal();
-    final mm = d.minute.toString().padLeft(2, '0');
-    final hh = d.hour.toString().padLeft(2, '0');
-    return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')} $hh:$mm';
+    final locale = Localizations.localeOf(context).toLanguageTag();
+    return DateFormat.yMMMd(locale).add_Hm().format(d);
   }
 
   Future<void> _openWalkingDirections(double lat, double lon) async {
+    final l10n = AppLocalizations.of(context)!;
     final geo = Uri.parse('geo:$lat,$lon?q=$lat,$lon');
     try {
       if (await canLaunchUrl(geo)) {
@@ -309,7 +315,7 @@ class _MapPageState extends State<MapPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Could not open maps.',
+            l10n.couldNotOpenMaps,
             style: GoogleFonts.lexend(fontWeight: FontWeight.w600),
           ),
         ),
@@ -318,23 +324,24 @@ class _MapPageState extends State<MapPage> {
   }
 
   Future<bool> _confirmDeleteScan() async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
           title: Text(
-            'Delete scan',
+            l10n.deleteScan,
             style: GoogleFonts.lexend(fontWeight: FontWeight.w700),
           ),
           content: Text(
-            'Are you sure you want to delete this scan?',
+            l10n.deleteScanConfirm,
             style: GoogleFonts.lexend(fontWeight: FontWeight.w500),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
               child: Text(
-                'Cancel',
+                l10n.cancel,
                 style: GoogleFonts.lexend(
                   fontWeight: FontWeight.w600,
                   color: MuzhirColors.mutedGrey,
@@ -348,7 +355,7 @@ class _MapPageState extends State<MapPage> {
                 foregroundColor: MuzhirColors.cardWhite,
               ),
               child: Text(
-                'Delete',
+                l10n.delete,
                 style: GoogleFonts.lexend(fontWeight: FontWeight.w700),
               ),
             ),
@@ -363,6 +370,7 @@ class _MapPageState extends State<MapPage> {
     required String scanId,
     required BuildContext sheetContext,
   }) async {
+    final l10n = AppLocalizations.of(context)!;
     final shouldDelete = await _confirmDeleteScan();
     if (!shouldDelete) return;
 
@@ -373,7 +381,7 @@ class _MapPageState extends State<MapPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
+          margin: const EdgeInsetsDirectional.all(16),
           backgroundColor: MuzhirColors.earthyClayRed,
           content: Text(
             _messageFromDio(e),
@@ -391,10 +399,10 @@ class _MapPageState extends State<MapPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
+          margin: const EdgeInsetsDirectional.all(16),
           backgroundColor: MuzhirColors.earthyClayRed,
           content: Text(
-            'Could not delete scan: $e',
+            l10n.couldNotDeleteScan(e.toString()),
             style: GoogleFonts.lexend(
               color: MuzhirColors.cardWhite,
               fontSize: 14,
@@ -411,13 +419,14 @@ class _MapPageState extends State<MapPage> {
     setState(() {
       _scanMarkers.removeWhere((s) => s.scanId == scanId);
     });
+    ref.invalidate(scanHistoryProvider);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(16),
+        margin: const EdgeInsetsDirectional.all(16),
         backgroundColor: MuzhirColors.forestGreen,
         content: Text(
-          'Scan removed successfully',
+          l10n.scanRemovedSuccessfully,
           style: GoogleFonts.lexend(
             color: MuzhirColors.cardWhite,
             fontSize: 14,
@@ -429,6 +438,7 @@ class _MapPageState extends State<MapPage> {
   }
 
   void _onMarkerTapped(String scanId) {
+    final l10n = AppLocalizations.of(context)!;
     final summary = _markerSummaryForScanId(scanId);
     if (summary == null) return;
 
@@ -436,7 +446,7 @@ class _MapPageState extends State<MapPage> {
     final lat = summary.latitude;
     final lon = summary.longitude;
     final cropLabel =
-        summary.cropType.isNotEmpty ? summary.cropType : 'Crop';
+        summary.cropType.isNotEmpty ? summary.cropType : l10n.crop;
 
     showModalBottomSheet<void>(
       context: context,
@@ -463,13 +473,14 @@ class _MapPageState extends State<MapPage> {
               setState(() {
                 _scanMarkers.removeWhere((s) => s.scanId == scanId);
               });
+              ref.invalidate(scanHistoryProvider);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   behavior: SnackBarBehavior.floating,
-                  margin: const EdgeInsets.all(16),
+                  margin: const EdgeInsetsDirectional.all(16),
                   backgroundColor: MuzhirColors.forestGreen,
                   content: Text(
-                    'Scan removed successfully',
+                    l10n.scanRemovedSuccessfully,
                     style: GoogleFonts.lexend(
                       color: MuzhirColors.cardWhite,
                       fontSize: 14,
@@ -497,14 +508,37 @@ class _MapPageState extends State<MapPage> {
 
   @override
   Widget build(BuildContext context) {
+    final historyAsync = ref.watch(scanHistoryProvider);
+    final l10n = AppLocalizations.of(context)!;
     final scheme = Theme.of(context).colorScheme;
     final mapBlue = Theme.of(context).extension<MuzhirFeatureColors>()!.mapUserLocationBlue;
+    final historyByScanId = <String, bool>{
+      for (final item in historyAsync.asData?.value ?? const [])
+        item.scanId: item.isHealthy,
+    };
 
-    final markerWidgets = _scanMarkers
+    final visibleMarkers = _scanMarkers.where((scan) {
+      final historicalHealth = historyByScanId[scan.scanId];
+      if (historyAsync.hasValue && historicalHealth == null) {
+        // Keep map and history synced: if history no longer has this scan, hide it.
+        return false;
+      }
+      final isHealthy = historicalHealth ?? scan.diagnosis.isHealthy;
+      switch (_selectedHealthFilter) {
+        case _MapHealthFilter.infected:
+          return !isHealthy;
+        case _MapHealthFilter.healthy:
+          return isHealthy;
+        case _MapHealthFilter.all:
+          return true;
+      }
+    }).toList();
+
+    final markerWidgets = visibleMarkers
         .where((d) => d.latitude != null && d.longitude != null)
         .map((d) {
       final point = LatLng(d.latitude!, d.longitude!);
-      final healthy = d.diagnosis.isHealthy;
+      final healthy = historyByScanId[d.scanId] ?? d.diagnosis.isHealthy;
       return Marker(
         point: point,
         width: 48,
@@ -530,7 +564,7 @@ class _MapPageState extends State<MapPage> {
 
     return Column(
       children: [
-        _buildCropFilterBar(),
+        _buildHealthFilterBar(),
         Expanded(
           child: Stack(
             children: [
@@ -548,6 +582,31 @@ class _MapPageState extends State<MapPage> {
                   TileLayer(
                     urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                     userAgentPackageName: 'com.example.muzhir',
+                    tileProvider: NetworkTileProvider(
+                      headers: {
+                        'User-Agent': 'Muzhir/1.0 (iOS; OpenStreetMap)',
+                      },
+                    ),
+                    tileBuilder: (context, tileWidget, tile) {
+                      if (tile.loadError) {
+                        debugPrint(
+                          '[TILE_ERR] z=${tile.coordinates.z} '
+                          'x=${tile.coordinates.x} '
+                          'y=${tile.coordinates.y}',
+                        );
+                        return ColoredBox(
+                          color: Colors.red.withValues(alpha: 0.15),
+                          child: const Center(
+                            child: Icon(
+                              Icons.wifi_off_rounded,
+                              color: Colors.red,
+                              size: 18,
+                            ),
+                          ),
+                        );
+                      }
+                      return tileWidget;
+                    },
                   ),
                   MarkerLayer(markers: markerWidgets),
                   if (_userLocation != null)
@@ -598,7 +657,7 @@ class _MapPageState extends State<MapPage> {
                             const SizedBox(width: 12),
                             Flexible(
                               child: Text(
-                                'Loading field scans…',
+                                l10n.loadingFieldScans,
                                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                       color: scheme.onSurface,
                                       fontWeight: FontWeight.w500,
@@ -625,7 +684,7 @@ class _MapPageState extends State<MapPage> {
                               alignment: Alignment.centerRight,
                               child: TextButton(
                                 onPressed: _loadMapMarkers,
-                                child: const Text('Retry'),
+                                child: Text(l10n.retry),
                               ),
                             ),
                           ],
@@ -652,7 +711,7 @@ class _MapPageState extends State<MapPage> {
                               const SizedBox(width: 12),
                               Flexible(
                                 child: Text(
-                                  'Finding your location…',
+                                  l10n.findingYourLocation,
                                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                         color: scheme.onSurface,
                                         fontWeight: FontWeight.w500,
@@ -666,8 +725,8 @@ class _MapPageState extends State<MapPage> {
                   ],
                 ),
               ),
-              Positioned(
-                right: 16,
+              PositionedDirectional(
+                end: 16,
                 bottom: 56,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -675,15 +734,17 @@ class _MapPageState extends State<MapPage> {
                   children: [
                     FloatingActionButton(
                       heroTag: 'map_fit_all_markers',
-                      onPressed: markerWidgets.isEmpty ? null : _fitAllMarkersVisible,
-                      tooltip: 'Show all markers',
+                      onPressed: markerWidgets.isEmpty
+                          ? null
+                          : () => _fitAllMarkersVisible(visibleMarkers),
+                      tooltip: l10n.showAllMarkers,
                       child: const Icon(Icons.zoom_out_map),
                     ),
                     const SizedBox(height: 12),
                     FloatingActionButton(
                       heroTag: 'map_recenter_user',
                       onPressed: _locationLoading ? null : _onRecenterOnUserPressed,
-                      tooltip: 'My location',
+                      tooltip: l10n.myLocation,
                       child: const Icon(Icons.my_location_rounded),
                     ),
                   ],
@@ -717,10 +778,14 @@ class _MapScanDetailSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final isHealthy = summary.diagnosis.isHealthy;
     final statusColor =
         isHealthy ? MuzhirColors.coreLeafGreen : MuzhirColors.earthyClayRed;
-    final statusText = isHealthy ? 'Healthy' : 'Unhealthy';
+    final statusText = TranslationHelper.getLocalizedText(
+      context,
+      isHealthy ? 'Healthy' : 'Unhealthy',
+    );
 
     return SafeArea(
       child: Container(
@@ -750,7 +815,7 @@ class _MapScanDetailSheet extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      'Scan details',
+                      l10n.scanDetails,
                       style: GoogleFonts.lexend(
                         fontSize: 20,
                         fontWeight: FontWeight.w700,
@@ -762,29 +827,31 @@ class _MapScanDetailSheet extends StatelessWidget {
                     onPressed: onDelete,
                     icon: const Icon(Icons.delete_outline),
                     color: MuzhirColors.earthyClayRed,
-                    tooltip: 'Delete scan',
+                    tooltip: l10n.deleteScanTooltip,
                   ),
                 ],
               ),
               const SizedBox(height: 20),
               _MapDetailRow(
-                label: 'Health status',
+                label: l10n.healthStatus,
                 value: statusText,
                 valueColor: statusColor,
               ),
               const SizedBox(height: 14),
               _MapDetailRow(
-                label: 'Crop type',
-                value: summary.cropType.isNotEmpty ? summary.cropType : '—',
+                label: l10n.cropType,
+                value: summary.cropType.isNotEmpty
+                    ? TranslationHelper.getLocalizedText(context, summary.cropType)
+                    : '—',
               ),
               const SizedBox(height: 14),
               _MapDetailRow(
-                label: 'Timestamp',
+                label: l10n.timestamp,
                 value: timestampLine,
               ),
               const SizedBox(height: 14),
               _MapDetailRow(
-                label: 'Coordinates',
+                label: l10n.coordinates,
                 value: coordinateLine,
               ),
               const SizedBox(height: 28),
@@ -798,7 +865,7 @@ class _MapScanDetailSheet extends StatelessWidget {
                     foregroundColor: MuzhirColors.cardWhite,
                   ),
                   child: Text(
-                    'View details',
+                    l10n.viewDetails,
                     style: GoogleFonts.lexend(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
@@ -814,7 +881,7 @@ class _MapScanDetailSheet extends StatelessWidget {
                   onPressed: onNavigate,
                   icon: const Icon(Icons.directions_walk_rounded),
                   label: Text(
-                    'Navigate',
+                    l10n.navigate,
                     style: GoogleFonts.lexend(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,

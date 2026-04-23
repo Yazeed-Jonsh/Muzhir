@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:muzhir/l10n/app_localizations.dart';
 import 'package:muzhir/theme/app_theme.dart';
 import 'package:muzhir/widgets/muzhir_auth_page_layout.dart';
 import '../../services/auth_service.dart';
@@ -42,17 +43,19 @@ class _SignUpScreenState extends State<SignUpScreen> {
       );
       if (!mounted) return;
       if (user != null) {
+        final l10n = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Account created successfully')),
+          SnackBar(content: Text(l10n.authAccountCreated)),
         );
         Navigator.of(context).pop();
       }
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       final scheme = Theme.of(context).colorScheme;
+      final l10n = AppLocalizations.of(context)!;
       final message = switch (e.code) {
-        'weak-password' => 'Password is too weak. Use at least 6 characters.',
-        'email-already-in-use' => 'An account already exists with this email.',
+        'weak-password' => l10n.authWeakPassword,
+        'email-already-in-use' => l10n.authEmailAlreadyInUse,
         _ => e.message ?? e.code,
       };
       ScaffoldMessenger.of(context).showSnackBar(
@@ -77,6 +80,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final termsStyle = GoogleFonts.lexend(
       fontSize: 11,
       height: 1.45,
@@ -92,15 +96,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
     return MuzhirAuthPageLayout(
       showBackButton: true,
-      title: 'Create Account',
-      subtitle:
-          'Start protecting your plants with AI-powered disease detection.',
+      title: l10n.authCreateAccount,
+      subtitle: l10n.authCreateAccountSubtitle,
       cardContent: Form(
         key: _formKey,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            muzhirAuthInputLabel('Full Name'),
+            muzhirAuthInputLabel(l10n.authFullName),
             TextFormField(
               controller: _nameController,
               textCapitalization: TextCapitalization.words,
@@ -111,15 +114,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
               decoration: muzhirAuthInputDecoration(
                 context: context,
                 prefixIcon: Icons.person_outline_rounded,
-                hintText: 'Your name',
+                hintText: l10n.authHintYourName,
               ),
               validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'Enter your name';
+                if (v == null || v.trim().isEmpty) return l10n.authFullNameRequired;
                 return null;
               },
             ),
             const SizedBox(height: 22),
-            muzhirAuthInputLabel('Email Address'),
+            muzhirAuthInputLabel(l10n.authEmailAddress),
             TextFormField(
               controller: _emailController,
               keyboardType: TextInputType.emailAddress,
@@ -130,16 +133,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
               decoration: muzhirAuthInputDecoration(
                 context: context,
                 prefixIcon: Icons.email_outlined,
-                hintText: 'your@email.com',
+                hintText: l10n.authHintEmail,
               ),
               validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'Enter your email';
-                if (!v.contains('@')) return 'Enter a valid email';
+                if (v == null || v.trim().isEmpty) return l10n.authEmailRequired;
+                if (!v.contains('@')) return l10n.authEmailInvalid;
                 return null;
               },
             ),
             const SizedBox(height: 22),
-            muzhirAuthInputLabel('Password'),
+            muzhirAuthInputLabel(l10n.authPassword),
             TextFormField(
               controller: _passwordController,
               obscureText: _obscurePassword,
@@ -150,9 +153,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
               decoration: muzhirAuthInputDecoration(
                 context: context,
                 prefixIcon: Icons.lock_outline_rounded,
-                hintText: 'At least 6 characters',
+                hintText: l10n.authHintPasswordMin,
                 suffixIcon: IconButton(
-                  tooltip: _obscurePassword ? 'Show password' : 'Hide password',
+                  tooltip:
+                      _obscurePassword ? l10n.authShowPassword : l10n.authHidePassword,
                   style: IconButton.styleFrom(
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     visualDensity: VisualDensity.compact,
@@ -168,9 +172,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 ),
               ),
               validator: (v) {
-                if (v == null || v.isEmpty) return 'Enter a password';
+                if (v == null || v.isEmpty) return l10n.authPasswordRequiredSignup;
                 if (v.length < 6) {
-                  return 'Password must be at least 6 characters';
+                  return l10n.authPasswordTooShort;
                 }
                 return null;
               },
@@ -181,29 +185,26 @@ class _SignUpScreenState extends State<SignUpScreen> {
               TextSpan(
                 style: termsStyle,
                 children: [
-                  const TextSpan(
-                    text: 'By signing up, you agree to our ',
-                  ),
+                  TextSpan(text: l10n.authTermsIntro),
                   TextSpan(
-                    text: 'Terms of Service',
+                    text: l10n.authTermsOfService,
                     style: termsAccent,
                   ),
-                  const TextSpan(text: ' and '),
+                  TextSpan(text: l10n.authTermsAnd),
                   TextSpan(
-                    text: 'Privacy Policy',
+                    text: l10n.authPrivacyPolicy,
                     style: termsAccent,
                   ),
-                  const TextSpan(text: '.'),
+                  TextSpan(text: l10n.authTermsOutro),
                 ],
               ),
             ),
             const SizedBox(height: 30),
             MuzhirAuthPrimaryButton(
-              label: 'Sign Up',
+              label: l10n.authSignUp,
               loading: _isLoading,
               onPressed: _onSignUp,
             ),
-            // This controls the gap between the card/button and the footer link
             const SizedBox(height: 24),
             Center(
               child: TextButton(
@@ -214,8 +215,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 ),
                 onPressed: () => Navigator.of(context).pop(),
                 child: muzhirAuthFooterLinkRichText(
-                  question: 'Already have an account? ',
-                  action: 'Log In',
+                  question: l10n.authAlreadyHaveAccount,
+                  action: l10n.authLogIn,
                 ),
               ),
             ),

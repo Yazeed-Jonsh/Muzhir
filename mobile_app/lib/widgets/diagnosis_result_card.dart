@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:muzhir/core/utils/translation_helper.dart';
+import 'package:muzhir/l10n/app_localizations.dart';
 import 'package:muzhir/theme/app_theme.dart';
 import 'package:muzhir/widgets/recent_scan_tile.dart';
 
@@ -29,13 +31,18 @@ class DiagnosisResultCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final cropDisplay = TranslationHelper.getLocalizedText(context, cropType);
+    final diseaseDisplay = TranslationHelper.getLocalizedText(context, diseaseName);
+    final sourceKey = source == ScanSource.mobile ? 'Mobile' : 'Drone';
+    final sourceDisplay = TranslationHelper.getLocalizedText(context, sourceKey);
     final Color statusColor =
         isHealthy ? MuzhirColors.coreLeafGreen : MuzhirColors.infectionSeriousOrange;
     final bool isMobile = source == ScanSource.mobile;
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsetsDirectional.all(20),
       decoration: BoxDecoration(
         color: MuzhirColors.white,
         borderRadius: BorderRadius.circular(20),
@@ -60,7 +67,7 @@ class DiagnosisResultCard extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                'Diagnosis Result',
+                l10n.diagnosisResult,
                 style: GoogleFonts.lexend(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
@@ -71,11 +78,22 @@ class DiagnosisResultCard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          // Crop type
+          _ResultRow(
+            icon: Icons.health_and_safety_outlined,
+            label: TranslationHelper.getLocalizedText(context, 'Status'),
+            value: TranslationHelper.getLocalizedText(
+              context,
+              isHealthy ? 'Healthy' : 'Unhealthy',
+            ),
+            valueColor: statusColor,
+          ),
+          const SizedBox(height: 12),
+
+          // Crop name (value is localized crop type)
           _ResultRow(
             icon: Icons.local_florist_rounded,
-            label: 'Crop',
-            value: cropType,
+            label: l10n.labelCropName,
+            value: cropDisplay,
             valueColor: MuzhirColors.deepCharcoal,
           ),
           const SizedBox(height: 12),
@@ -83,15 +101,16 @@ class DiagnosisResultCard extends StatelessWidget {
           // Disease name
           _ResultRow(
             icon: Icons.coronavirus_rounded,
-            label: 'Disease',
-            value: diseaseName,
+            label: l10n.disease,
+            value: diseaseDisplay,
             valueColor: statusColor,
           ),
           const SizedBox(height: 16),
 
           // Confidence bar
           Text(
-            'Confidence',
+            l10n.confidence,
+            textAlign: TextAlign.start,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: MuzhirColors.deepCharcoal.withValues(alpha: 0.55),
                   fontSize: 13,
@@ -115,6 +134,7 @@ class DiagnosisResultCard extends StatelessWidget {
               const SizedBox(width: 12),
               Text(
                 '$confidencePercent%',
+                textAlign: TextAlign.start,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                       color: statusColor,
@@ -142,7 +162,8 @@ class DiagnosisResultCard extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                'Source: ${isMobile ? 'Mobile' : 'Drone'}',
+                '${l10n.source}: $sourceDisplay',
+                textAlign: TextAlign.start,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: MuzhirColors.deepCharcoal.withValues(alpha: 0.6),
                       fontWeight: FontWeight.w500,
@@ -163,7 +184,8 @@ class DiagnosisResultCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Location: ${latitude!.toStringAsFixed(5)}, ${longitude!.toStringAsFixed(5)}',
+                    '${l10n.location}: ${latitude!.toStringAsFixed(5)}, ${longitude!.toStringAsFixed(5)}',
+                    textAlign: TextAlign.start,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: MuzhirColors.deepCharcoal.withValues(alpha: 0.6),
                           fontWeight: FontWeight.w500,
@@ -200,6 +222,7 @@ class _ResultRow extends StatelessWidget {
         const SizedBox(width: 8),
         Text(
           '$label: ',
+          textAlign: TextAlign.start,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: MuzhirColors.deepCharcoal.withValues(alpha: 0.55),
               ),
@@ -207,6 +230,7 @@ class _ResultRow extends StatelessWidget {
         Flexible(
           child: Text(
             value,
+            textAlign: TextAlign.start,
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   fontWeight: FontWeight.w600,
                   color: valueColor,

@@ -1,0 +1,194 @@
+{
+  "@@locale": "en",
+  "appTitle": "Muzhir",
+  "home": "Home",
+  "diagnose": "Diagnose",
+  "map": "Map",
+  "history": "History",
+  "diseaseMap": "Disease Map",
+  "scanHistory": "Scan History",
+  "recentDiagnosis": "Recent Diagnosis",
+  "viewAll": "View All",
+  "languageToggleLabel": "AR/EN",
+  "languageChangedToEnglish": "Language switched to English",
+  "languageChangedToArabic": "Language switched to Arabic",
+  "analysisInProgress": "Analysis in progress",
+  "noDiagnosisYet": "No diagnosis yet",
+  "justNow": "Just now",
+  "minutesAgo": "{minutes} min ago",
+  "@minutesAgo": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "hoursAgo": "{hours} hours ago",
+  "@hoursAgo": {
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "daysAgo": "{days} days ago",
+  "@daysAgo": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "diagnoseYourPlant": "Diagnose Your Plant",
+  "diagnoseHeaderDescription": "Upload or capture a plant image to detect diseases using our advanced AI botanical analysis engine.",
+  "tapToUploadOrCaptureImage": "Tap to upload or capture image",
+  "supportsJpgPng": "Supports JPG, PNG up to 10MB",
+  "captureTip": "Ensure the leaf is clear and well-lit for best results",
+  "quickCapture": "QUICK CAPTURE",
+  "camera": "Camera",
+  "gallery": "Gallery",
+  "mobile": "Mobile",
+  "drone": "Drone",
+  "selectedVia": "Selected via: {source}",
+  "@selectedVia": {
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "analyzePlant": "Analyze Plant",
+  "pleaseSelectImage": "Please select an image to enable analysis",
+  "scanAnother": "Scan Another",
+  "getTreatmentAdvice": "Get Treatment Advice",
+  "hideTreatmentAdvice": "Hide treatment advice",
+  "healthyNoTreatment": "Your plant is healthy! No treatment needed.",
+  "noRecentScans": "No recent scans yet. Run an analysis above to see your latest results here.",
+  "scanRemovedSuccessfully": "Scan removed successfully",
+  "couldNotOpenScan": "Could not open scan: {error}",
+  "@couldNotOpenScan": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "analysisFailed": "Analysis failed: {error}",
+  "@analysisFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "couldNotDeleteScan": "Could not delete scan: {error}",
+  "@couldNotDeleteScan": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "couldNotLoadHistory": "Could not load history",
+  "retry": "Retry",
+  "noScanHistoryYet": "No scan history yet",
+  "historyEmptyDescription": "Your completed diagnoses will show up here. Open the Diagnose tab to analyze a plant.",
+  "deleteScan": "Delete scan",
+  "deleteScanConfirm": "Are you sure you want to delete this scan?",
+  "cancel": "Cancel",
+  "delete": "Delete",
+  "diagnosis": "Diagnosis",
+  "deleteScanTooltip": "Delete scan",
+  "couldNotLoadScan": "Could not load scan.",
+  "noDiagnosisData": "No diagnosis data.",
+  "diagnosisResult": "Diagnosis Result",
+  "crop": "Crop",
+  "labelCropType": "Crop Type",
+  "labelCropName": "Crop name",
+  "selectCropTypeHint": "Select crop type",
+  "disease": "Disease",
+  "confidence": "Confidence",
+  "source": "Source",
+  "location": "Location",
+  "treatmentAdvice": "Treatment advice",
+  "close": "Close",
+  "recommendation": "Recommendation",
+  "recommendationUnavailable": "No recommendation available.",
+  "goodMorning": "Good morning",
+  "goodAfternoon": "Good afternoon",
+  "goodEvening": "Good evening",
+  "farmer": "Farmer",
+  "diseased": "Diseased",
+  "healthy": "Healthy",
+  "totalScans": "Total Scans",
+  "jeddahSaudiArabia": "Jeddah, Saudi Arabia",
+  "wind": "Wind",
+  "humidity": "Humidity",
+  "recentScans": "Recent Scans",
+  "yesterday": "Yesterday",
+  "all": "All",
+  "tomato": "Tomato",
+  "corn": "Corn",
+  "wheat": "Wheat",
+  "couldNotLoadMapMarkers": "Could not load map markers.",
+  "couldNotOpenMaps": "Could not open maps.",
+  "loadingFieldScans": "Loading field scans…",
+  "findingYourLocation": "Finding your location…",
+  "showAllMarkers": "Show all markers",
+  "myLocation": "My location",
+  "unhealthy": "Unhealthy",
+  "scanDetails": "Scan details",
+  "healthStatus": "Health status",
+  "cropType": "Crop type",
+  "timestamp": "Timestamp",
+  "coordinates": "Coordinates",
+  "viewDetails": "View details",
+  "navigate": "Navigate",
+  "account": "Account",
+  "language": "Language",
+  "role": "Role",
+  "roleFarmer": "Farmer",
+  "roleMember": "Member",
+  "memberSince": "Member since",
+  "settingsAndActions": "Settings & Actions",
+  "backendHealthOk": "Backend health check succeeded.",
+  "backendHealthFailed": "Backend unreachable or unhealthy. See console for Dio logs.",
+  "testBackendConnection": "Test backend connection",
+  "signOut": "Sign Out",
+  "authWelcomeBack": "Welcome Back",
+  "authSignInSubtitle": "Sign in to manage your farm with AI-powered insights.",
+  "authEmailAddress": "Email Address",
+  "authPassword": "Password",
+  "authHintEmail": "your@email.com",
+  "authHintPassword": "Enter your password",
+  "authEmailRequired": "Email is required",
+  "authEmailInvalid": "Enter a valid email",
+  "authPasswordRequired": "Password is required",
+  "authShowPassword": "Show password",
+  "authHidePassword": "Hide password",
+  "authForgotPassword": "Forgot Password?",
+  "authLogin": "Login",
+  "authSignedInSuccessfully": "Signed in successfully",
+  "authEnterEmailFirst": "Please enter your email first",
+  "authPasswordResetSent": "Password reset email sent!",
+  "authDontHaveAccount": "Don't have an account? ",
+  "authSignUp": "Sign Up",
+  "authCreateAccount": "Create Account",
+  "authCreateAccountSubtitle": "Start protecting your plants with AI-powered disease detection.",
+  "authFullName": "Full Name",
+  "authHintYourName": "Your name",
+  "authFullNameRequired": "Enter your name",
+  "authHintPasswordMin": "At least 6 characters",
+  "authPasswordRequiredSignup": "Enter a password",
+  "authPasswordTooShort": "Password must be at least 6 characters",
+  "authAccountCreated": "Account created successfully",
+  "authWeakPassword": "Password is too weak. Use at least 6 characters.",
+  "authEmailAlreadyInUse": "An account already exists with this email.",
+  "authTermsIntro": "By signing up, you agree to our ",
+  "authTermsOfService": "Terms of Service",
+  "authTermsAnd": " and ",
+  "authPrivacyPolicy": "Privacy Policy",
+  "authTermsOutro": ".",
+  "authAlreadyHaveAccount": "Already have an account? ",
+  "authLogIn": "Log In"
+}

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:muzhir/l10n/app_localizations.dart';
 import 'package:muzhir/theme/app_theme.dart';
 
 /// Dropdown for selecting crop type before analysis.
@@ -16,13 +17,23 @@ class CropTypeDropdown extends StatelessWidget {
 
   static const List<String> _cropTypes = ['Tomato'];
 
+  static String _displayLabel(String cropId, AppLocalizations l10n) {
+    switch (cropId) {
+      case 'Tomato':
+        return l10n.tomato;
+      default:
+        return cropId;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Crop Type',
+          l10n.labelCropType,
           style: GoogleFonts.lexend(
             fontSize: 16,
             fontWeight: FontWeight.w600,
@@ -75,16 +86,16 @@ class CropTypeDropdown extends StatelessWidget {
               dropdownColor: MuzhirColors.white,
               style: Theme.of(context).textTheme.bodyLarge,
               hint: Text(
-                'Select crop type',
+                l10n.selectCropTypeHint,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: MuzhirColors.deepCharcoal.withValues(alpha: 0.4),
                     ),
               ),
               items: _cropTypes
                   .map(
-                    (crop) => DropdownMenuItem(
+                    (crop) => DropdownMenuItem<String>(
                       value: crop,
-                      child: Text(crop),
+                      child: Text(_displayLabel(crop, l10n)),
                     ),
                   )
                   .toList(),
