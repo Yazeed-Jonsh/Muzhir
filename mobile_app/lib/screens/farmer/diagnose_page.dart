@@ -8,7 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import 'package:muzhir/core/api/api_service.dart';
 import 'package:muzhir/core/utils/network_url_helper.dart';
 import 'package:muzhir/core/utils/translation_helper.dart';
@@ -347,7 +347,6 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
   }
 
   Future<void> _onAnalyze() async {
-    final l10n = AppLocalizations.of(context)!;
     if (_selectedCrop == null || _selectedImage == null) return;
 
     setState(() {
