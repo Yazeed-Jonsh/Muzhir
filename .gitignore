@@ -54,7 +54,7 @@ venv/
 **/google-services.json
 **/GoogleService-Info.plist
 
-# FlutterFire-generated options (regenerate per machine / CI secret if needed)
+# FlutterFire-generated options (provided to CI through GitHub Secrets)
 mobile_app/lib/firebase_options.dart
 
 # Project-local Firebase CLI file under app dir only (root firebase.json is tracked)

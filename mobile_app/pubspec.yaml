@@ -42,7 +42,6 @@ flutter:
   generate: true
   uses-material-design: true
   assets:
-    - .env
     - assets/icons/
     - assets/logos/
     # ── ML Models ──────────────────────────────────────────────────────────
