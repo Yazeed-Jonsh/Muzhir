@@ -61,6 +61,7 @@ mobile_app/lib/firebase_options.dart
 mobile_app/firebase.json
 
 backend/assets/best.pt
+mobile_app/devtools_options.yaml
 
 # Backend: duplicate exports of mobile YOLO artifacts (canonical files live under
 # mobile_app/assets/models/ and android/app/src/main/assets/). Keep
