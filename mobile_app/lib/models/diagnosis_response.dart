@@ -66,6 +66,7 @@ class DiagnosisResponse {
         label: diseaseLabel.isEmpty ? '—' : diseaseLabel,
         confidence: _double(json['confidence']),
         isHealthy: isHealthy,
+        labelAr: _optionalLabelAr(json['diseaseNameAr'] ?? json['disease_name_ar']),
       ),
       recommendation: const RecommendationSection(textAr: '', textEn: ''),
       latitude: _optionalDouble(json['latitude']),
@@ -121,6 +122,13 @@ class DiagnosisResponse {
       label = '—';
     }
 
+    final labelAr = _optionalLabelAr(
+      diseaseMap['diseaseNameAr'] ??
+          diseaseMap['disease_name_ar'] ??
+          json['diseaseNameAr'] ??
+          json['disease_name_ar'],
+    );
+
     final isHealthy = json['isHealthy'] == true ||
         json['is_healthy'] == true ||
         _labelImpliesHealthy(label);
@@ -161,6 +169,7 @@ class DiagnosisResponse {
         label: label,
         confidence: confidence.clamp(0.0, 1.0),
         isHealthy: isHealthy,
+        labelAr: labelAr,
       ),
       recommendation: RecommendationSection(textAr: textAr, textEn: textEn),
       latitude: _optionalDouble(json['latitude'] ?? json['captureLatitude']),
@@ -190,17 +199,22 @@ class DiagnosisSection {
     required this.label,
     required this.confidence,
     required this.isHealthy,
+    this.labelAr,
   });
 
   final String label;
   final double confidence;
   final bool isHealthy;
 
+  /// Arabic disease name when the API provides it (e.g. class map or scan detail).
+  final String? labelAr;
+
   factory DiagnosisSection.fromJson(Map<String, dynamic> json) {
     return DiagnosisSection(
       label: _string(json['label']),
       confidence: _double(json['confidence']),
       isHealthy: json['is_healthy'] == true || json['isHealthy'] == true,
+      labelAr: _optionalLabelAr(json['labelAr'] ?? json['label_ar']),
     );
   }
 
@@ -208,6 +222,7 @@ class DiagnosisSection {
         'label': label,
         'confidence': confidence,
         'is_healthy': isHealthy,
+        if (labelAr != null) 'labelAr': labelAr,
       };
 }
 
@@ -235,6 +250,12 @@ class RecommendationSection {
 }
 
 String _string(Object? value) => value?.toString() ?? '';
+
+String? _optionalLabelAr(Object? value) {
+  if (value == null) return null;
+  final s = value.toString().trim();
+  return s.isEmpty ? null : s;
+}
 
 double _double(Object? value) {
   if (value is num) return value.toDouble();

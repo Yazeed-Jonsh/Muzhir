@@ -13,6 +13,7 @@ class DiagnosisResultCard extends StatelessWidget {
     super.key,
     required this.cropType,
     required this.diseaseName,
+    this.diseaseNameAr,
     required this.confidencePercent,
     required this.source,
     this.isHealthy = false,
@@ -22,6 +23,9 @@ class DiagnosisResultCard extends StatelessWidget {
 
   final String cropType;
   final String diseaseName;
+
+  /// When set (e.g. from class map or API [labelAr]), used for Arabic locale.
+  final String? diseaseNameAr;
   final int confidencePercent;
   final ScanSource source;
   final bool isHealthy;
@@ -33,7 +37,11 @@ class DiagnosisResultCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final cropDisplay = TranslationHelper.getLocalizedText(context, cropType);
-    final diseaseDisplay = TranslationHelper.getLocalizedText(context, diseaseName);
+    final diseaseDisplay = TranslationHelper.localizedDiseaseName(
+      context,
+      diseaseName,
+      diseaseNameAr,
+    );
     final sourceKey = source == ScanSource.mobile ? 'Mobile' : 'Drone';
     final sourceDisplay = TranslationHelper.getLocalizedText(context, sourceKey);
     final Color statusColor =

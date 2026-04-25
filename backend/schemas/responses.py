@@ -261,9 +261,16 @@ class DiagnoseUploadResponse(BaseModel):
 class DiagnosePriorityBlock(BaseModel):
     """Diagnosis-first compact payload for immediate UX."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     label: str = Field(
         description="Detected disease label (or healthy label).",
         examples=["Early blight"],
+    )
+    label_ar: str = Field(
+        alias="labelAr",
+        description="Arabic disease label from class map (same source as diseaseNameAr).",
+        examples=["اللفحة المبكرة"],
     )
     confidence: float = Field(
         ge=0.0,

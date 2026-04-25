@@ -241,6 +241,22 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
     return e.message ?? l10n.analysisFailed('unknown error');
   }
 
+  bool _shouldFallbackToOnDevice(DioException e) {
+    switch (e.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+      case DioExceptionType.connectionError:
+        return true;
+      case DioExceptionType.unknown:
+        return e.response == null;
+      case DioExceptionType.badCertificate:
+      case DioExceptionType.badResponse:
+      case DioExceptionType.cancel:
+        return false;
+    }
+  }
+
   String _messageFromDioScanDetail(DioException e, AppLocalizations l10n) {
     final data = e.response?.data;
     if (data is Map && data['detail'] != null) {
@@ -403,6 +419,10 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
       await _fetchRecentScans(showRefreshing: true);
     } on DioException catch (e) {
       if (!mounted) return;
+      if (_shouldFallbackToOnDevice(e)) {
+        await _analyzeOnDevice();
+        return;
+      }
       setState(() => _isAnalyzing = false);
       _showErrorSnackBar(_messageFromDioException(e, l10n));
     } catch (e) {
@@ -958,6 +978,7 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
         DiagnosisResultCard(
           cropType: _selectedCrop ?? 'Tomato',
           diseaseName: d.diagnosis.label,
+          diseaseNameAr: d.diagnosis.labelAr,
           confidencePercent: confidencePct,
           source: _selectedSource,
           isHealthy: d.diagnosis.isHealthy,
@@ -1075,6 +1096,7 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
           DiagnosisResultCard(
             cropType: _selectedCrop ?? 'Tomato',
             diseaseName: detections.first.labelEn,
+            diseaseNameAr: detections.first.labelAr,
             confidencePercent: detections.first.confidencePercent,
             source: _selectedSource,
             isHealthy: detections.first.isHealthy,

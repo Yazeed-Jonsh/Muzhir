@@ -319,6 +319,7 @@ class _DiagnosisResultDetailScreenState extends State<DiagnosisResultDetailScree
           DiagnosisResultCard(
             cropType: widget.cropType,
             diseaseName: d.label,
+            diseaseNameAr: d.labelAr,
             confidencePercent: confidencePct,
             source: widget.source,
             isHealthy: d.isHealthy,

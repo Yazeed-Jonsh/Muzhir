@@ -37,6 +37,21 @@ class TranslationHelper {
     'IoT': 'حساسات',
   };
 
+  /// Picks the Arabic name when the locale is Arabic and [arabicName] is non-empty;
+  /// otherwise localizes [englishName] via [getLocalizedText] (for legacy/unknown keys).
+  static String localizedDiseaseName(
+    BuildContext context,
+    String englishName,
+    String? arabicName,
+  ) {
+    final ar = arabicName?.trim();
+    if (ar != null && ar.isNotEmpty) {
+      final code = Localizations.localeOf(context).languageCode.toLowerCase();
+      if (code == 'ar') return ar;
+    }
+    return getLocalizedText(context, englishName);
+  }
+
   /// Returns Arabic mapping when locale is Arabic and [key] matches a known entry;
   /// otherwise returns [key] unchanged (English or unknown).
   static String getLocalizedText(BuildContext context, String key) {

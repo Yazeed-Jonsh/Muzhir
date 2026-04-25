@@ -384,6 +384,7 @@ async def diagnose(
         set_scan_status(scan_id, "processing")
         inference_result = run_inference(image_bytes, model)
         disease_name = "No disease detected"
+        disease_name_ar = "لا يوجد مرض"
         confidence_score = 0.0
         is_healthy = True
         recommendation_payload: dict[str, str] = {
@@ -501,6 +502,7 @@ async def diagnose(
         source=normalized_source,
         diagnosis={
             "label": disease_name,
+            "labelAr": disease_name_ar,
             "confidence": confidence_score,
             "is_healthy": is_healthy,
         },

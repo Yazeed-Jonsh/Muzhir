@@ -93,7 +93,7 @@ class InferenceService {
     final yolo = YOLO(
       modelPath: _modelPath,
       task: YOLOTask.detect,
-      useGpu: true,
+      useGpu: false,
     );
 
     await yolo.loadModel();
