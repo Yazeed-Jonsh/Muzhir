@@ -32,6 +32,8 @@ dependencies:
   flutter_dotenv: ^5.2.1
   # ── On-Device Inference ────────────────────────────────────────────────
   ultralytics_yolo: ^0.3.0
+  # ── Image Utils ───────────────────────────────────────────────────────
+  gal: ^2.3.0
 
 dev_dependencies:
   flutter_test:

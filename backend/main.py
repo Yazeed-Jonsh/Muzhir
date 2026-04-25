@@ -505,6 +505,12 @@ async def diagnose(
             "labelAr": disease_name_ar,
             "confidence": confidence_score,
             "is_healthy": is_healthy,
+            "boundingBox": None if is_healthy or inference is None else {
+                "x": inference.bbox["x"],
+                "y": inference.bbox["y"],
+                "width": inference.bbox["w"],
+                "height": inference.bbox["h"],
+            },
         },
         recommendation=recommendation_payload,
         latitude=capture_latitude,

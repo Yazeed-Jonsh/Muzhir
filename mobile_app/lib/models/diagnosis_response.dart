@@ -193,6 +193,37 @@ class DiagnosisResponse {
       };
 }
 
+/// Normalized bounding box returned by the API {x, y, width, height} in [0, 1].
+class BoundingBox {
+  const BoundingBox({
+    required this.x,
+    required this.y,
+    required this.width,
+    required this.height,
+  });
+
+  /// Left edge (normalized 0–1).
+  final double x;
+
+  /// Top edge (normalized 0–1).
+  final double y;
+
+  /// Box width (normalized 0–1).
+  final double width;
+
+  /// Box height (normalized 0–1).
+  final double height;
+
+  factory BoundingBox.fromJson(Map<String, dynamic> json) {
+    return BoundingBox(
+      x: _double(json['x']),
+      y: _double(json['y']),
+      width: _double(json['width']),
+      height: _double(json['height']),
+    );
+  }
+}
+
 /// `diagnosis` object: label, confidence, and health flag.
 class DiagnosisSection {
   const DiagnosisSection({
@@ -200,6 +231,7 @@ class DiagnosisSection {
     required this.confidence,
     required this.isHealthy,
     this.labelAr,
+    this.boundingBox,
   });
 
   final String label;
@@ -209,12 +241,17 @@ class DiagnosisSection {
   /// Arabic disease name when the API provides it (e.g. class map or scan detail).
   final String? labelAr;
 
+  /// Normalized bounding box from the API; null when healthy or not provided.
+  final BoundingBox? boundingBox;
+
   factory DiagnosisSection.fromJson(Map<String, dynamic> json) {
+    final rawBox = json['boundingBox'] ?? json['bounding_box'];
     return DiagnosisSection(
       label: _string(json['label']),
       confidence: _double(json['confidence']),
       isHealthy: json['is_healthy'] == true || json['isHealthy'] == true,
       labelAr: _optionalLabelAr(json['labelAr'] ?? json['label_ar']),
+      boundingBox: rawBox is Map<String, dynamic> ? BoundingBox.fromJson(rawBox) : null,
     );
   }
 

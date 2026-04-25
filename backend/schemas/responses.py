@@ -282,6 +282,12 @@ class DiagnosePriorityBlock(BaseModel):
         description="True when no disease is detected.",
         examples=[False],
     )
+    bounding_box: Optional[dict] = Field(
+        default=None,
+        alias="boundingBox",
+        description="Normalized detection box {x,y,width,height} (0–1); null when healthy.",
+        examples=[{"x": 0.12, "y": 0.08, "width": 0.35, "height": 0.28}],
+    )
 
 
 class DiagnoseRecommendationBlock(BaseModel):

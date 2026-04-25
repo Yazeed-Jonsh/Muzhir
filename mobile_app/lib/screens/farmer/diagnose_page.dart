@@ -1,6 +1,8 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:gal/gal.dart';
 import 'package:dio/dio.dart';
 import 'package:dotted_border/dotted_border.dart';
 import 'package:flutter/material.dart';
@@ -417,6 +419,17 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
         _state = _DiagnoseState.result;
       });
       await _fetchRecentScans(showRefreshing: true);
+
+      // Save annotated image to gallery when disease is detected and box is available.
+      final box = response.diagnosis.boundingBox;
+      if (!response.diagnosis.isHealthy && box != null && _selectedImage != null) {
+        await _saveAnnotatedImageToGallery(
+          _selectedImage!,
+          box,
+          response.diagnosis.label,
+          response.diagnosis.confidence,
+        );
+      }
     } on DioException catch (e) {
       if (!mounted) return;
       if (_shouldFallbackToOnDevice(e)) {
@@ -462,6 +475,85 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
       _diagnosisLatitude = null;
       _diagnosisLongitude = null;
     });
+  }
+
+  /// Renders the selected image with the API bounding box burned in and saves
+  /// the result to the device gallery. Only called when diseased and box is set.
+  Future<void> _saveAnnotatedImageToGallery(
+    File imageFile,
+    BoundingBox box,
+    String label,
+    double confidence,
+  ) async {
+    try {
+      final bytes = await imageFile.readAsBytes();
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final srcImage = frame.image;
+
+      final w = srcImage.width;
+      final h = srcImage.height;
+
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()));
+
+      canvas.drawImage(srcImage, Offset.zero, Paint());
+
+      // Draw box and label badge at full image resolution.
+      const strokeWidth = 3.0;
+      const labelHeight = 28.0;
+      const fontSize = 14.0;
+
+      final color = MuzhirColors.earthyClayRed;
+      final rect = Rect.fromLTWH(
+        box.x * w,
+        box.y * h,
+        box.width * w,
+        box.height * h,
+      );
+
+      canvas.drawRect(
+        rect,
+        Paint()
+          ..color = color.withValues(alpha: 0.9)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = strokeWidth,
+      );
+
+      final confidencePct = (confidence * 100).round().clamp(0, 100);
+      final badgeText = '$label  $confidencePct%';
+      final tp = TextPainter(
+        text: TextSpan(
+          text: badgeText,
+          style: const TextStyle(
+            color: Color(0xFFFFFFFF),
+            fontSize: fontSize,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: w.toDouble());
+
+      final bgLeft = rect.left;
+      final bgTop = (rect.top - labelHeight).clamp(0.0, h.toDouble());
+      final bgWidth = (tp.width + 16).clamp(0.0, w.toDouble() - bgLeft);
+
+      canvas.drawRRect(
+        RRect.fromLTRBR(bgLeft, bgTop, bgLeft + bgWidth, bgTop + labelHeight, const Radius.circular(5)),
+        Paint()..color = color,
+      );
+      tp.paint(canvas, Offset(bgLeft + 8, bgTop + (labelHeight - tp.height) / 2));
+
+      final picture = recorder.endRecording();
+      final annotatedImage = await picture.toImage(w, h);
+      final byteData = await annotatedImage.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) return;
+
+      final pngBytes = byteData.buffer.asUint8List();
+      await Gal.putImageBytes(pngBytes, name: 'muzhir_${DateTime.now().millisecondsSinceEpoch}');
+    } catch (_) {
+      // Gallery save is best-effort; do not surface errors to the user.
+    }
   }
 
   void _showCaptureSheet() {
@@ -761,6 +853,13 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
 
   Widget _buildImagePreviewInsideCard(BuildContext context) {
     final detections = _onDeviceResult?.detections ?? [];
+    final apiBox = _diagnosisResult?.diagnosis.boundingBox;
+    final apiLabel = _diagnosisResult?.diagnosis.label;
+    final apiConfidence = _diagnosisResult?.diagnosis.confidence ?? 0.0;
+    final showApiBox = apiBox != null &&
+        !(_diagnosisResult?.diagnosis.isHealthy ?? true) &&
+        _state == _DiagnoseState.result;
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
       child: Stack(
@@ -773,13 +872,27 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
               fit: BoxFit.cover,
             ),
           ),
-          // Bounding box overlay — only shown after on-device inference.
+          // Bounding box overlay — on-device inference detections.
           if (detections.isNotEmpty)
             Positioned.fill(
               child: AspectRatio(
                 aspectRatio: 4 / 3,
                 child: CustomPaint(
                   painter: _BoundingBoxPainter(detections),
+                ),
+              ),
+            ),
+          // Bounding box overlay — online API result.
+          if (showApiBox)
+            Positioned.fill(
+              child: AspectRatio(
+                aspectRatio: 4 / 3,
+                child: CustomPaint(
+                  painter: _ApiBoxPainter(
+                    box: apiBox,
+                    label: apiLabel ?? '',
+                    confidence: apiConfidence,
+                  ),
                 ),
               ),
             ),
@@ -1699,6 +1812,85 @@ class _BoundingBoxPainter extends CustomPainter {
   @override
   bool shouldRepaint(_BoundingBoxPainter old) =>
       old.detections != detections;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// API bounding box overlay (single detection from remote inference)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Draws a single bounding box and confidence label from the remote API result.
+///
+/// Coordinates are normalised to [0, 1] relative to the rendered widget size,
+/// matching the same convention used by [_BoundingBoxPainter] for on-device results.
+class _ApiBoxPainter extends CustomPainter {
+  const _ApiBoxPainter({
+    required this.box,
+    required this.label,
+    required this.confidence,
+  });
+
+  final BoundingBox box;
+  final String label;
+  final double confidence;
+
+  static const double _strokeWidth = 2.5;
+  static const double _labelHeight = 20.0;
+  static const double _fontSize = 11.0;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const color = MuzhirColors.earthyClayRed;
+
+    final rect = Rect.fromLTWH(
+      box.x * size.width,
+      box.y * size.height,
+      box.width * size.width,
+      box.height * size.height,
+    );
+
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..color = color.withValues(alpha: 0.9)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = _strokeWidth,
+    );
+
+    final confidencePct = (confidence * 100).round().clamp(0, 100);
+    final badgeText = '$label  $confidencePct%';
+    final tp = TextPainter(
+      text: TextSpan(
+        text: badgeText,
+        style: const TextStyle(
+          color: Color(0xFFFFFFFF),
+          fontSize: _fontSize,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: size.width);
+
+    final bgLeft = rect.left;
+    final bgTop = (rect.top - _labelHeight).clamp(0.0, size.height);
+    final bgWidth = (tp.width + 12).clamp(0.0, size.width - bgLeft);
+
+    canvas.drawRRect(
+      RRect.fromLTRBR(
+        bgLeft,
+        bgTop,
+        bgLeft + bgWidth,
+        bgTop + _labelHeight,
+        const Radius.circular(4),
+      ),
+      Paint()..color = color,
+    );
+
+    tp.paint(canvas, Offset(bgLeft + 6, bgTop + (_labelHeight - tp.height) / 2));
+  }
+
+  @override
+  bool shouldRepaint(_ApiBoxPainter old) =>
+      old.box != box || old.label != label || old.confidence != confidence;
 }
 
 /// Quadcopter silhouette with leaf badge — reads as crop-spraying / field drone.
