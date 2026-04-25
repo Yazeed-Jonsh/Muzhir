@@ -88,8 +88,8 @@ class InferenceService {
   Future<void> initialize() async {
     if (_yolo != null) return;
 
-    // ultralytics_yolo 0.3.0: thresholds are not ctor args; we filter in
-    // [OutputMapper] after [predict] (see confidenceThreshold there).
+    // ultralytics_yolo 0.3.0 accepts thresholds per prediction; keep the
+    // native threshold lower than the Dart mapper so we can preserve recall.
     final yolo = YOLO(
       modelPath: _modelPath,
       task: YOLOTask.detect,
@@ -116,7 +116,11 @@ class InferenceService {
     final sw = Stopwatch()..start();
     final imageBytes = await Preprocessor.prepareImageBytes(imageFile);
 
-    final raw = await _yolo!.predict(imageBytes);
+    final raw = await _yolo!.predict(
+      imageBytes,
+      confidenceThreshold: 0.15,
+      iouThreshold: 0.7,
+    );
     final wallMs = sw.elapsed.inMilliseconds.toDouble();
 
     final labels = await LabelLoader.load();

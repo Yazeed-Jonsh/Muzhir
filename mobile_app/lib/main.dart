@@ -28,14 +28,16 @@ void main() {
       // Allow google_fonts to fetch fonts at runtime; if DNS is broken the
       // errors will be visible and help diagnose connectivity issues.
       GoogleFonts.config.allowRuntimeFetching = true;
+      await dotenv.load(fileName: '.env', isOptional: true);
       try {
-        await dotenv.load(fileName: '.env');
-      } catch (_) {
-        // Keep startup resilient in local/dev; EnvConfig falls back to dart-define/default.
+        await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
+        );
+      } catch (e, st) {
+        debugPrint('[FIREBASE_INIT] Failed to initialize Firebase: $e');
+        debugPrintStack(stackTrace: st);
+        rethrow;
       }
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
       FirebaseFirestore.instance.settings = const Settings(
         persistenceEnabled: true,
       );
@@ -58,9 +60,8 @@ Future<void> _probeConnectivity() async {
   ];
   for (final url in probes) {
     try {
-      final response = await http
-          .get(Uri.parse(url))
-          .timeout(const Duration(seconds: 8));
+      final response =
+          await http.get(Uri.parse(url)).timeout(const Duration(seconds: 8));
       debugPrint('[NET_PROBE] $url → HTTP ${response.statusCode}');
     } catch (e) {
       debugPrint('[NET_PROBE] $url → ERROR: $e');

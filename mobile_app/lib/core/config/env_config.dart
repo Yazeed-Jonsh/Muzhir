@@ -15,7 +15,8 @@ class EnvConfig {
   ///
   /// - Android emulator: `10.0.2.2` reaches the host machine.
   /// - iOS Simulator: `127.0.0.1` reaches the Mac host.
-  /// - Physical iOS device: set `MUZHIR_BACKEND_URL` in `.env` to your Mac's LAN IP.
+  /// - Physical devices: pass `MUZHIR_BACKEND_URL` with `--dart-define` or
+  ///   load it from `.env` during local development.
   static String get _platformDefaultBackendBaseUrl {
     if (kIsWeb) {
       return 'http://127.0.0.1:8000';
@@ -35,7 +36,8 @@ class EnvConfig {
     if (fromDefine.isNotEmpty) {
       return fromDefine;
     }
-    final value = dotenv.env['MUZHIR_BACKEND_URL']?.trim();
+    final value =
+        dotenv.isInitialized ? dotenv.env['MUZHIR_BACKEND_URL']?.trim() : null;
     if (value != null && value.isNotEmpty) return value;
     return _platformDefaultBackendBaseUrl;
   }
