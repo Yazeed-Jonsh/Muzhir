@@ -12,7 +12,7 @@ BACKEND_DIR = ROOT_DIR / "backend"
 DEFAULT_FIREBASE_CREDENTIALS_PATH = (
     Path(__file__).resolve().parents[1] / "config" / "service-account.json"
 )
-DEFAULT_YOLO_WEIGHTS_PATH = Path(__file__).resolve().parents[1] / "assets" / "best.pt"
+DEFAULT_YOLO_WEIGHTS_PATH = Path(__file__).resolve().parents[1] / "assets" / "best.onnx"
 
 
 class Settings(BaseSettings):
@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     )
 
     FIREBASE_CREDENTIALS_PATH: str = Field(default=str(DEFAULT_FIREBASE_CREDENTIALS_PATH))
+    FIREBASE_CREDENTIALS_JSON: str = Field(default="")
     CLOUDINARY_URL: str = Field(default="")
     GROQ_API_KEY: str = Field(default="")
     YOLO_WEIGHTS_PATH: str = Field(default=str(DEFAULT_YOLO_WEIGHTS_PATH))

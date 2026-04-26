@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -33,11 +34,16 @@ def ensure_firebase_initialized() -> None:
     """Initialize the default Firebase Admin app once (safe across uvicorn reloads)."""
     if firebase_admin._apps:
         return
+    raw_json = settings.FIREBASE_CREDENTIALS_JSON.strip()
+    if raw_json:
+        cred = credentials.Certificate(json.loads(raw_json))
+        firebase_admin.initialize_app(cred)
+        return
     path = _resolve_service_account_path()
     if not path.is_file():
         raise FileNotFoundError(
             f"Firebase service account JSON not found at {path}. "
-            "Set FIREBASE_CREDENTIALS_PATH or add backend/config/service-account.json "
+            "Set FIREBASE_CREDENTIALS_JSON or add backend/config/service-account.json "
             f"(or legacy {_LEGACY_SERVICE_ACCOUNT_PATH.name})."
         )
     cred = credentials.Certificate(str(path))

@@ -9,6 +9,7 @@ import re
 from uuid import uuid4
 
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, Response, UploadFile, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from firebase_admin import firestore
 
@@ -93,6 +94,13 @@ app = FastAPI(
     redoc_url="/redoc" if settings.SHOW_DOCS else None,
     openapi_url="/openapi.json" if settings.SHOW_DOCS else None,
     swagger_ui_parameters={"persistAuthorization": True},
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Default Firebase Admin app (Auth + Firestore). Idempotent for uvicorn --reload.

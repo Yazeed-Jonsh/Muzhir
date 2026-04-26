@@ -53,6 +53,7 @@ venv/
 **/*serviceAccount*.json
 **/google-services.json
 **/GoogleService-Info.plist
+backend/config/service-account.json
 
 # FlutterFire-generated options (provided to CI through GitHub Secrets)
 mobile_app/lib/firebase_options.dart
