@@ -1,0 +1,150 @@
+---
+description: Karpathy-inspired coding principles for Python and Flutter/Dart development — biases toward simplicity, surgical edits, and transparent logic.
+globs: **/*.{py,dart,ipynb}
+alwaysApply: true
+---
+
+# Karpathy Engineering Philosophy
+
+> Tradeoff: These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+
+---
+
+## 1. Think Before Coding
+
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
+
+Before implementing:
+- State assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them — don't pick silently.
+- If a simpler approach exists, say so. **Push back when warranted.**
+- If something is unclear, stop. Name what's confusing. Ask.
+
+---
+
+## 2. Simplicity First
+
+**Minimum code that solves the problem. Nothing speculative.**
+
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
+
+> Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+### Flutter / Dart — Avoid Widget Bloat
+
+❌ Don't do this for a one-off screen:
+```dart
+// Unnecessary abstraction
+class GenericCardWidget<T extends CardModel> extends StatelessWidget {
+  final CardBuilder<T> builder;
+  final CardController controller;
+  ...
+}
+```
+
+✅ Do this instead:
+```dart
+// Inline it. Extract only when used in 2+ places.
+Card(child: Text(item.title))
+```
+
+**State management rules:**
+- Don't reach for Riverpod/Bloc/Cubit for state that lives in one screen.
+- `setState` is not a code smell. Use it for local, ephemeral UI state.
+- Only lift state when two separate widget subtrees genuinely need it.
+- Avoid `StreamController` + `StreamBuilder` when a `ValueNotifier` or simple `bool` does the job.
+
+### Python / AI — Keep It Readable
+
+❌ Don't do this:
+```python
+loss = sum(criterion(model(x), y) * w for x, y, w in zip(inputs, targets, weights)) / N
+```
+
+✅ Do this:
+```python
+losses = [criterion(model(x), y) for x, y in zip(inputs, targets)]
+loss = sum(losses) / len(losses)
+```
+
+---
+
+## 3. Surgical Changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+When editing existing code:
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it — don't delete it.
+
+When your changes create orphans:
+- Remove imports/variables/functions that **your** changes made unused.
+- Don't remove pre-existing dead code unless asked.
+
+> Every changed line should trace directly to the user's request.
+
+---
+
+## 4. Goal-Driven Execution
+
+**Define success criteria. Loop until verified.**
+
+Transform tasks into verifiable goals:
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
+
+For multi-step tasks, state a brief plan:
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
+```
+
+---
+
+## 5. Neural Network Debugging (Python / `.ipynb`)
+
+**Isolate, instrument, verify — don't guess.**
+
+When a model isn't training:
+1. Overfit a single batch first. If it can't, the architecture or loss is broken.
+2. Log loss every N steps. A flat loss means dead gradients or a broken data pipeline.
+3. Check input shapes and dtypes explicitly before the training loop.
+4. Keep the training loop flat and readable — don't bury `.backward()` inside helper abstractions.
+
+```python
+# ✅ Transparent training loop
+for step, (x, y) in enumerate(loader):
+    logits = model(x)
+    loss = criterion(logits, y)
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+    if step % 100 == 0:
+        print(f"step {step} | loss {loss.item():.4f}")
+```
+
+❌ Don't wrap the loop in a `Trainer` class on the first pass. Debug naked, then abstract.
+
+---
+
+## 6. Senior Engineer Pushback
+
+If asked to add any of the following without a clear reason, **object and ask why**:
+
+| Request | Pushback |
+|---|---|
+| New state management layer (Flutter) | "Is `setState` or `ValueNotifier` not sufficient here?" |
+| Custom base widget / mixin (Flutter) | "Is this used in more than one place?" |
+| Abstract base class / Protocol (Python) | "Is there more than one concrete implementation planned?" |
+| New ML training abstraction (Python) | "Can we debug it naked first, then wrap?" |
+| Error handling for an edge case that can't happen | "Is this scenario actually reachable?" |
+
+> The default answer to "should we add an abstraction?" is **no** until proven otherwise.
