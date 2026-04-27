@@ -581,10 +581,11 @@ class _MapPageState extends ConsumerState<MapPage> {
                 children: [
                   TileLayer(
                     urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.example.muzhir',
+                    userAgentPackageName: 'com.muzhir.app',
+                    maxZoom: 19,
                     tileProvider: NetworkTileProvider(
                       headers: {
-                        'User-Agent': 'Muzhir/1.0 (iOS; OpenStreetMap)',
+                        'User-Agent': 'Muzhir/1.0 (Android; com.muzhir.app)',
                       },
                     ),
                     tileBuilder: (context, tileWidget, tile) {

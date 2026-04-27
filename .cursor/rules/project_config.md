@@ -76,7 +76,7 @@ Muzhir is an AI-powered plant disease detection system designed to automate and 
 
 
 * 
-**YOLOv8**: (Core object detection architecture) 
+**YOLO26**: (Core object detection architecture) 
 
 
 * 

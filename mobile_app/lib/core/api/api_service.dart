@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:muzhir/core/config/env_config.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -25,10 +26,10 @@ class ApiService {
         headers: const {'Accept': 'application/json'},
       ),
     );
-    _dio.interceptors.addAll([
-      _AuthInterceptor(_auth, _dio),
-      _LoggingInterceptor(),
-    ]);
+    _dio.interceptors.add(_AuthInterceptor(_auth, _dio));
+    if (kDebugMode) {
+      _dio.interceptors.add(_LoggingInterceptor());
+    }
   }
 
   static ApiService? _instance;
@@ -321,9 +322,6 @@ class _AuthInterceptor extends Interceptor {
         // Token read failed; proceed without Bearer (caller may get 401).
       }
     }
-    print(
-      'DEBUG: Full Authorization Header: ${options.headers['Authorization']}',
-    );
     handler.next(options);
   }
 
@@ -362,10 +360,6 @@ class _AuthInterceptor extends Interceptor {
       }
       opts.extra[_kExtra401Retried] = true;
       opts.headers['Authorization'] = 'Bearer $token';
-      print(
-        'DEBUG: Full Authorization Header (after refresh): '
-        '${opts.headers['Authorization']}',
-      );
       final response = await _dio.fetch(opts);
       handler.resolve(response);
     } on DioException catch (retryErr) {
