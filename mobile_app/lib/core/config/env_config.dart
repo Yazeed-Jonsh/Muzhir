@@ -13,22 +13,9 @@ class EnvConfig {
 
   /// Default when no dart-define or `.env` value is present.
   ///
-  /// - Android emulator: `10.0.2.2` reaches the host machine.
-  /// - iOS Simulator: `127.0.0.1` reaches the Mac host.
-  /// - Physical devices: pass `MUZHIR_BACKEND_URL` with `--dart-define` or
-  ///   load it from `.env` during local development.
+  /// - Points to the production backend on Render.
   static String get _platformDefaultBackendBaseUrl {
-    if (kIsWeb) {
-      return 'http://127.0.0.1:8000';
-    }
-    switch (defaultTargetPlatform) {
-      case TargetPlatform.android:
-        return 'http://10.0.2.2:8000';
-      case TargetPlatform.iOS:
-        return 'http://127.0.0.1:8000';
-      default:
-        return 'http://127.0.0.1:8000';
-    }
+    return 'https://muzhir.onrender.com';
   }
 
   static String get backendBaseUrl {
