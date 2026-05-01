@@ -447,4 +447,13 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get authLogIn => 'تسجيل الدخول';
+
+  @override
+  String get pendingScanMarker => 'الفحص في الانتظار';
+
+  @override
+  String get pendingScanWillSync => 'سيُرفع هذا الفحص إلى الخادم عند استعادة الاتصال.';
+
+  @override
+  String get offlineScansUploaded => 'تم رفع الفحوصات المحفوظة بنجاح';
 }

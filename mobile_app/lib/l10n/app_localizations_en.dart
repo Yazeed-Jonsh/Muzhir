@@ -447,4 +447,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get authLogIn => 'Log In';
+
+  @override
+  String get pendingScanMarker => 'Pending scan';
+
+  @override
+  String get pendingScanWillSync => 'This scan will upload to the server when you reconnect.';
+
+  @override
+  String get offlineScansUploaded => 'Offline scans uploaded successfully';
 }

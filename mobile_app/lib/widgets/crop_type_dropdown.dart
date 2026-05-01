@@ -4,7 +4,6 @@ import 'package:muzhir/l10n/app_localizations.dart';
 import 'package:muzhir/theme/app_theme.dart';
 
 /// Dropdown for selecting crop type before analysis.
-/// V1: only "Tomato" is available.
 class CropTypeDropdown extends StatelessWidget {
   const CropTypeDropdown({
     super.key,
@@ -15,12 +14,14 @@ class CropTypeDropdown extends StatelessWidget {
   final String? value;
   final ValueChanged<String?> onChanged;
 
-  static const List<String> _cropTypes = ['Tomato'];
+  static const List<String> _cropTypes = ['Tomato', 'Corn'];
 
   static String _displayLabel(String cropId, AppLocalizations l10n) {
     switch (cropId) {
       case 'Tomato':
-        return l10n.tomato;
+        return '🍅  ${l10n.tomato}';
+      case 'Corn':
+        return '🌽  ${l10n.corn}';
       default:
         return cropId;
     }

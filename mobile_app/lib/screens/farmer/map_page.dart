@@ -10,8 +10,10 @@ import 'package:muzhir/core/api/api_service.dart';
 import 'package:muzhir/core/utils/translation_helper.dart';
 import 'package:muzhir/l10n/app_localizations.dart';
 import 'package:muzhir/models/diagnosis_response.dart';
+import 'package:muzhir/providers/connectivity_provider.dart';
 import 'package:muzhir/providers/scan_history_provider.dart';
 import 'package:muzhir/screens/farmer/diagnosis_result_detail_screen.dart';
+import 'package:muzhir/services/pending_upload_store.dart';
 import 'package:muzhir/theme/app_theme.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -48,11 +50,15 @@ class _MapPageState extends ConsumerState<MapPage> {
   String? _markersError;
   _MapHealthFilter _selectedHealthFilter = _MapHealthFilter.all;
 
+  List<PendingUpload> _pendingUploads = [];
+  bool _isDrainingQueue = false;
+
   @override
   void initState() {
     super.initState();
     _mapController = MapController();
     _loadMapMarkers();
+    _loadPendingUploads();
     if (widget.isTabVisible) {
       _refreshUserLocation(autoCenterOnFirstFix: true);
     }
@@ -86,6 +92,9 @@ class _MapPageState extends ConsumerState<MapPage> {
     });
     try {
       final list = await ApiService().getMapMarkers();
+      // Persist for offline use.
+      await PendingUploadStore.saveMarkers(
+          list.map((d) => d.toMap()).toList());
       if (!mounted) return;
       setState(() {
         _scanMarkers = list;
@@ -94,18 +103,87 @@ class _MapPageState extends ConsumerState<MapPage> {
       _fitAllMarkersVisible();
     } on DioException catch (e) {
       if (!mounted) return;
-      setState(() {
-        _markersLoading = false;
-        _markersError = _messageFromDio(e);
-        _scanMarkers = [];
-      });
-    } catch (e) {
+      final cached = await _loadCachedMarkers();
       if (!mounted) return;
       setState(() {
         _markersLoading = false;
-        _markersError = e.toString();
-        _scanMarkers = [];
+        _markersError = cached.isEmpty ? _messageFromDio(e) : null;
+        _scanMarkers = cached;
       });
+      if (cached.isNotEmpty) _fitAllMarkersVisible();
+    } catch (e) {
+      if (!mounted) return;
+      final cached = await _loadCachedMarkers();
+      if (!mounted) return;
+      setState(() {
+        _markersLoading = false;
+        _markersError = cached.isEmpty ? e.toString() : null;
+        _scanMarkers = cached;
+      });
+      if (cached.isNotEmpty) _fitAllMarkersVisible();
+    }
+  }
+
+  Future<List<DiagnosisResponse>> _loadCachedMarkers() async {
+    final raw = await PendingUploadStore.loadMarkers();
+    if (raw.isEmpty) return const [];
+    final result = <DiagnosisResponse>[];
+    for (final m in raw) {
+      try {
+        result.add(DiagnosisResponse.fromJson(m));
+      } catch (_) {}
+    }
+    return result;
+  }
+
+  Future<void> _loadPendingUploads() async {
+    final uploads = await PendingUploadStore.loadQueue();
+    if (!mounted) return;
+    setState(() => _pendingUploads = uploads);
+  }
+
+  /// Uploads all queued offline scans and refreshes markers on success.
+  /// Each entry is removed from the queue regardless of outcome to avoid
+  /// retrying permanently-broken items (e.g. deleted image files).
+  Future<void> _drainPendingUploads() async {
+    if (_isDrainingQueue || _pendingUploads.isEmpty) return;
+    setState(() => _isDrainingQueue = true);
+    try {
+      final uploads = List<PendingUpload>.from(_pendingUploads);
+      for (final upload in uploads) {
+        try {
+          await ApiService().uploadImageForDiagnosis(
+            upload.imageFile,
+            cropId: upload.cropId,
+            overrideLatitude: upload.latitude,
+            overrideLongitude: upload.longitude,
+          );
+        } catch (_) {
+          // Remove from queue even on failure — avoids infinite retry loops.
+        }
+      }
+      await PendingUploadStore.clearQueue();
+      if (!mounted) return;
+      setState(() => _pendingUploads = []);
+      await _loadMapMarkers();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsetsDirectional.all(16),
+          backgroundColor: MuzhirColors.forestGreen,
+          content: Text(
+            AppLocalizations.of(context)!.offlineScansUploaded,
+            style: GoogleFonts.lexend(
+              color: MuzhirColors.cardWhite,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isDrainingQueue = false);
     }
   }
 
@@ -437,6 +515,77 @@ class _MapPageState extends ConsumerState<MapPage> {
     );
   }
 
+  void _onPendingMarkerTapped(BuildContext context, AppLocalizations l10n) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => SafeArea(
+        child: Container(
+          width: double.infinity,
+          decoration: const BoxDecoration(
+            color: MuzhirColors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: MuzhirColors.mutedGrey.withValues(alpha: 0.35),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Row(
+                children: [
+                  const Icon(Icons.cloud_upload_outlined,
+                      color: Colors.orange, size: 24),
+                  const SizedBox(width: 10),
+                  Text(
+                    l10n.pendingScanMarker,
+                    style: GoogleFonts.lexend(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: MuzhirColors.titleCharcoal,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(
+                l10n.pendingScanWillSync,
+                style: GoogleFonts.lexend(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: MuzhirColors.titleCharcoal.withValues(alpha: 0.65),
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: FilledButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: MuzhirColors.forestGreen,
+                    foregroundColor: MuzhirColors.cardWhite,
+                  ),
+                  child: Text(
+                    l10n.close,
+                    style: GoogleFonts.lexend(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _onMarkerTapped(String scanId) {
     final l10n = AppLocalizations.of(context)!;
     final summary = _markerSummaryForScanId(scanId);
@@ -508,6 +657,15 @@ class _MapPageState extends ConsumerState<MapPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Drain queued offline uploads the moment connectivity is restored.
+    ref.listen<AsyncValue<bool>>(isOfflineProvider, (prev, next) {
+      final wasOffline = prev?.value ?? true;
+      final isNowOnline = !(next.value ?? true);
+      if (wasOffline && isNowOnline && _pendingUploads.isNotEmpty) {
+        _drainPendingUploads();
+      }
+    });
+
     final historyAsync = ref.watch(scanHistoryProvider);
     final l10n = AppLocalizations.of(context)!;
     final scheme = Theme.of(context).colorScheme;
@@ -610,6 +768,36 @@ class _MapPageState extends ConsumerState<MapPage> {
                     },
                   ),
                   MarkerLayer(markers: markerWidgets),
+                  if (_pendingUploads.isNotEmpty)
+                    MarkerLayer(
+                      markers: _pendingUploads
+                          .where((u) =>
+                              u.latitude != null && u.longitude != null)
+                          .map((u) => Marker(
+                                point: LatLng(u.latitude!, u.longitude!),
+                                width: 48,
+                                height: 48,
+                                alignment: Alignment.topCenter,
+                                child: GestureDetector(
+                                  onTap: () =>
+                                      _onPendingMarkerTapped(context, l10n),
+                                  child: Icon(
+                                    Icons.location_on_rounded,
+                                    size: 44,
+                                    color: Colors.orange,
+                                    shadows: [
+                                      Shadow(
+                                        color: Colors.black
+                                            .withValues(alpha: 0.35),
+                                        blurRadius: 4,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ))
+                          .toList(),
+                    ),
                   if (_userLocation != null)
                     MarkerLayer(
                       markers: [

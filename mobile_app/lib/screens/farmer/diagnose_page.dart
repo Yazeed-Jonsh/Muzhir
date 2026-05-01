@@ -21,6 +21,7 @@ import 'package:muzhir/models/scan_history_item.dart';
 import 'package:muzhir/providers/connectivity_provider.dart';
 import 'package:muzhir/screens/farmer/diagnosis_result_detail_screen.dart';
 import 'package:muzhir/services/inference_service.dart';
+import 'package:muzhir/services/pending_upload_store.dart';
 import 'package:muzhir/theme/app_theme.dart';
 import 'package:muzhir/widgets/crop_type_dropdown.dart';
 import 'package:muzhir/widgets/diagnosis_result_card.dart';
@@ -396,6 +397,15 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
         _onDeviceResult = result;
         _state = _DiagnoseState.result;
       });
+      // Queue for lazy upload when connectivity returns.  GPS coordinates were
+      // already captured in _getCurrentLocation() when the image was picked.
+      await PendingUploadStore.enqueue(PendingUpload(
+        imagePath: _selectedImage!.path,
+        cropId: _cropIdForApi(_selectedCrop),
+        latitude: _diagnosisLatitude,
+        longitude: _diagnosisLongitude,
+        capturedAt: DateTime.now(),
+      ));
     } catch (e) {
       if (!mounted) return;
       setState(() => _isAnalyzing = false);

@@ -190,5 +190,8 @@
   "authPrivacyPolicy": "Privacy Policy",
   "authTermsOutro": ".",
   "authAlreadyHaveAccount": "Already have an account? ",
-  "authLogIn": "Log In"
+  "authLogIn": "Log In",
+  "pendingScanMarker": "Pending scan",
+  "pendingScanWillSync": "This scan will upload to the server when you reconnect.",
+  "offlineScansUploaded": "Offline scans uploaded successfully"
 }

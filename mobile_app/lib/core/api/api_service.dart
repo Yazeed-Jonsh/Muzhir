@@ -62,6 +62,8 @@ class ApiService {
     File imageFile, {
     String? cropId,
     String? growthStageId,
+    double? overrideLatitude,
+    double? overrideLongitude,
   }) async {
     // Multipart bodies (FormData) are single-use streams; refresh token first to
     // reduce the chance of interceptor-level 401 retry on a finalized body.
@@ -69,28 +71,32 @@ class ApiService {
       await _auth.currentUser?.getIdToken(true);
     } catch (_) {}
 
-    double? captureLatitude;
-    double? captureLongitude;
-    try {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (serviceEnabled) {
-        var permission = await Geolocator.checkPermission();
-        if (permission == LocationPermission.denied) {
-          permission = await Geolocator.requestPermission();
+    // Use pre-captured coordinates (lazy upload path) when provided; otherwise
+    // capture fresh GPS so live scans always get current position.
+    double? captureLatitude = overrideLatitude;
+    double? captureLongitude = overrideLongitude;
+    if (overrideLatitude == null && overrideLongitude == null) {
+      try {
+        final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        if (serviceEnabled) {
+          var permission = await Geolocator.checkPermission();
+          if (permission == LocationPermission.denied) {
+            permission = await Geolocator.requestPermission();
+          }
+          if (permission != LocationPermission.denied &&
+              permission != LocationPermission.deniedForever) {
+            final position = await Geolocator.getCurrentPosition(
+              locationSettings: const LocationSettings(
+                accuracy: LocationAccuracy.high,
+              ),
+            );
+            captureLatitude = position.latitude;
+            captureLongitude = position.longitude;
+          }
         }
-        if (permission != LocationPermission.denied &&
-            permission != LocationPermission.deniedForever) {
-          final position = await Geolocator.getCurrentPosition(
-            locationSettings: const LocationSettings(
-              accuracy: LocationAccuracy.high,
-            ),
-          );
-          captureLatitude = position.latitude;
-          captureLongitude = position.longitude;
-        }
+      } catch (_) {
+        // Omit coordinates when location is unavailable.
       }
-    } catch (_) {
-      // Omit coordinates when location is unavailable.
     }
 
     final filename = imageFile.uri.pathSegments.isNotEmpty

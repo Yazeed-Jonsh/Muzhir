@@ -190,5 +190,8 @@
   "authPrivacyPolicy": "سياسة الخصوصية",
   "authTermsOutro": ".",
   "authAlreadyHaveAccount": "لديك حساب بالفعل؟ ",
-  "authLogIn": "تسجيل الدخول"
+  "authLogIn": "تسجيل الدخول",
+  "pendingScanMarker": "الفحص في الانتظار",
+  "pendingScanWillSync": "سيُرفع هذا الفحص إلى الخادم عند استعادة الاتصال.",
+  "offlineScansUploaded": "تم رفع الفحوصات المحفوظة بنجاح"
 }

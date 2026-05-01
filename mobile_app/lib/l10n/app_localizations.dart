@@ -946,6 +946,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Log In'**
   String get authLogIn;
+
+  /// No description provided for @pendingScanMarker.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending scan'**
+  String get pendingScanMarker;
+
+  /// No description provided for @pendingScanWillSync.
+  ///
+  /// In en, this message translates to:
+  /// **'This scan will upload to the server when you reconnect.'**
+  String get pendingScanWillSync;
+
+  /// No description provided for @offlineScansUploaded.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline scans uploaded successfully'**
+  String get offlineScansUploaded;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {
