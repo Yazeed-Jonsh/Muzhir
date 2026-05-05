@@ -1523,16 +1523,21 @@ class _AccountInfoCard extends ConsumerWidget {
     final languageControl = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _LanguageFlagButton(
-          flag: '🇸🇦',
-          tooltip: l10n.language,
+        _LanguageTextButton(
+          label: 'العربية',
           selected: effectiveLanguageCode == 'ar',
           onTap: () => onTapLanguage('ar'),
         ),
-        const SizedBox(width: 10),
-        _LanguageFlagButton(
-          flag: '🇬🇧',
-          tooltip: l10n.language,
+        Text(
+          ' | ',
+          style: GoogleFonts.lexend(
+            color: Colors.grey.shade500,
+            fontSize: 18,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        _LanguageTextButton(
+          label: 'English',
           selected: effectiveLanguageCode == 'en',
           onTap: () => onTapLanguage('en'),
         ),
@@ -1631,60 +1636,32 @@ class _AccountInfoCard extends ConsumerWidget {
   }
 }
 
-class _LanguageFlagButton extends StatelessWidget {
-  const _LanguageFlagButton({
-    required this.flag,
-    required this.tooltip,
+class _LanguageTextButton extends StatelessWidget {
+  const _LanguageTextButton({
+    required this.label,
     required this.selected,
     required this.onTap,
   });
 
-  final String flag;
-  final String tooltip;
+  final String label;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Ink(
-            width: 56,
-            height: 44,
-            decoration: BoxDecoration(
-              color: MuzhirColors.creamScaffold,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: selected
-                    ? MuzhirColors.forestGreen
-                    : MuzhirColors.weatherIconCircle.withValues(alpha: 0.9),
-                width: selected ? 2 : 1.2,
-              ),
-            ),
-            child: Stack(
-              children: [
-                Center(
-                  child: Text(
-                    flag,
-                    style: const TextStyle(fontSize: 24),
-                  ),
-                ),
-                if (selected)
-                  const PositionedDirectional(
-                    top: 2,
-                    end: 2,
-                    child: Icon(
-                      Icons.check_circle,
-                      size: 16,
-                      color: MuzhirColors.forestGreen,
-                    ),
-                  ),
-              ],
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: Text(
+            label,
+            style: GoogleFonts.lexend(
+              color: selected ? Theme.of(context).primaryColor : Colors.grey,
+              fontSize: 17,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
             ),
           ),
         ),

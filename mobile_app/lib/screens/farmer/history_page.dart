@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import 'package:dio/dio.dart';
 import 'package:muzhir/core/api/api_service.dart';
 import 'package:muzhir/core/utils/network_url_helper.dart';
@@ -28,17 +29,16 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
     await ref.read(scanHistoryProvider.future);
   }
 
-  String _diagnosisLabel(ScanHistoryItem item, AppLocalizations l10n) {
-    final name = item.diseaseName?.trim();
-    if (name != null && name.isNotEmpty) return name;
-    if (item.status == 'pending' || item.status == 'processing') {
-      return l10n.analysisInProgress;
-    }
-    return l10n.noDiagnosisYet;
-  }
-
   String _relativeTimestamp(DateTime t, AppLocalizations l10n) {
-    return TranslationHelper.relativeScanTimeLabel(context, t, l10n);
+    final now = DateTime.now();
+    final d = now.difference(t);
+    if (d.isNegative || d.inSeconds < 45) return l10n.justNow;
+    if (d.inMinutes < 60) return l10n.minutesAgo(d.inMinutes);
+    if (d.inHours < 24) return l10n.hoursAgo(d.inHours);
+    if (d.inDays == 1) return l10n.yesterday;
+    if (d.inDays < 7) return l10n.daysAgo(d.inDays);
+    final localeTag = Localizations.localeOf(context).toLanguageTag();
+    return DateFormat.yMMMd(localeTag).format(t);
   }
 
   String _messageFromDioException(DioException e, AppLocalizations l10n) {
@@ -171,7 +171,7 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
   ) async {
     final navigator = Navigator.of(context);
     final l10n = AppLocalizations.of(context)!;
-    final isAr = Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final isArabic = Localizations.localeOf(context).languageCode == 'ar';
     showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -188,10 +188,12 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
       if (!context.mounted) return;
       final deleted = await navigator.push<bool>(
         MaterialPageRoute<bool>(
-          builder: (_) => DiagnosisResultDetailScreen(
-            diagnosis: diagnosis,
-            cropType: isAr ? item.cropNameAr : item.cropName,
-          ),
+            builder: (_) => DiagnosisResultDetailScreen(
+                    diagnosis: diagnosis,
+                    cropType: (isArabic && item.cropNameAr.isNotEmpty)
+                        ? item.cropNameAr
+                        : item.cropName,
+                  ),
         ),
       );
       if (!context.mounted || deleted != true) return;
@@ -259,7 +261,7 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
   Widget build(BuildContext context) {
     final historyAsync = ref.watch(scanHistoryProvider);
     final l10n = AppLocalizations.of(context)!;
-    final isAr = Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final isArabic = Localizations.localeOf(context).languageCode == 'ar';
     return ColoredBox(
       color: MuzhirColors.creamScaffold,
       child: historyAsync.when(
@@ -285,7 +287,9 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
               itemCount: items.length,
               itemBuilder: (context, index) {
                 final item = items[index];
-                final label = _diagnosisLabel(item, l10n);
+                final cropName = (isArabic && item.cropNameAr.trim().isNotEmpty)
+                    ? item.cropNameAr.trim()
+                    : item.cropName.trim();
                 return Padding(
                   padding: const EdgeInsetsDirectional.only(bottom: 16),
                   child: Dismissible(
@@ -307,8 +311,7 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
                     confirmDismiss: (_) => _deleteScanFromHistory(context, item),
                     child: _HistoryListTile(
                       item: item,
-                      cropName: isAr ? item.cropNameAr : item.cropName,
-                      diagnosisLabel: label,
+                      cropName: cropName,
                       timeLabel: _relativeTimestamp(item.createdAt, l10n),
                       confidencePercent: item.confidencePercentDisplay,
                       isHealthy: item.isHealthy,
@@ -429,7 +432,6 @@ class _HistoryListTile extends StatelessWidget {
   const _HistoryListTile({
     required this.item,
     required this.cropName,
-    required this.diagnosisLabel,
     required this.timeLabel,
     this.confidencePercent,
     required this.isHealthy,
@@ -438,7 +440,6 @@ class _HistoryListTile extends StatelessWidget {
 
   final ScanHistoryItem item;
   final String cropName;
-  final String diagnosisLabel;
   final String timeLabel;
   /// Whole percent from API; null hides the badge.
   final int? confidencePercent;
@@ -447,10 +448,23 @@ class _HistoryListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final statusColor = isHealthy
         ? MuzhirColors.coreLeafGreen
         : MuzhirColors.infectionSeriousOrange;
     final url = NetworkUrlHelper.normalizeRemoteUrl(item.imageUrl);
+    final englishDiseaseName = item.diseaseName?.trim();
+    final fallbackDiseaseName =
+        (englishDiseaseName != null && englishDiseaseName.isNotEmpty)
+        ? englishDiseaseName
+        : l10n.noDiagnosisYet;
+    final diseaseDisplay = (item.status == 'pending' || item.status == 'processing')
+        ? l10n.analysisInProgress
+        : TranslationHelper.localizedDiseaseName(
+            context,
+            fallbackDiseaseName,
+            item.diseaseNameAr,
+          );
 
     return Material(
       color: Colors.transparent,
@@ -538,7 +552,7 @@ class _HistoryListTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      TranslationHelper.getLocalizedText(context, diagnosisLabel),
+                      diseaseDisplay,
                       style: GoogleFonts.lexend(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,

@@ -18,8 +18,12 @@ class TranslationHelper {
     'Early Blight': 'لفحة مبكرة',
     'Late Blight': 'لفحة متأخرة',
     'Tomato_Mildiou': 'البياض الزغبي',
+    'Tomato Mildiou': 'البياض الزغبي',
+    'Tomato Brown Spots': 'بقع الطماطم البنية',
+    'Corn Brown Spots': 'بقع الذرة البنية',
     'Healthy': 'سليم',
     'No disease detected': 'لم يتم اكتشاف مرض',
+    'Unknown disease': 'مرض غير معروف',
   };
 
   /// Short UI labels (English key → Arabic).

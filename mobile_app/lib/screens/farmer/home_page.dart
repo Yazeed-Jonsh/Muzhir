@@ -153,7 +153,9 @@ class _FarmerHomePageState extends ConsumerState<FarmerHomePage> {
               padding: const EdgeInsetsDirectional.symmetric(horizontal: 16),
               child: RecentScanTile(
                 scan: RecentScan(
-                  plantName: isAr ? scan.cropNameAr : scan.cropName,
+                  plantName: (isAr && scan.cropNameAr.isNotEmpty)
+                      ? scan.cropNameAr
+                      : scan.cropName,
                   diseaseName: _localizedDiagnosisLabel(scan, l10n),
                   confidencePercent: scan.confidencePercentDisplay,
                   timeAgo: TranslationHelper.relativeScanTimeLabel(

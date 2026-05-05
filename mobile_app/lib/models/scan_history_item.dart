@@ -42,33 +42,65 @@ class ScanHistoryItem {
   }
 
   factory ScanHistoryItem.fromJson(Map<String, dynamic> json) {
+    final diagnosis = json['diagnosis'];
+    final diagnosisMap = diagnosis is Map
+        ? Map<String, dynamic>.from(diagnosis)
+        : <String, dynamic>{};
+    final disease = diagnosisMap['disease'];
+    final diseaseMap = disease is Map
+        ? Map<String, dynamic>.from(disease)
+        : <String, dynamic>{};
+
     return ScanHistoryItem(
-      scanId: _string(json['scanId'] ?? json['scan_id']),
-      cropName: _string(json['cropName'] ?? json['crop_name']),
-      cropNameAr: _string(json['cropNameAr'] ?? json['crop_name_ar']),
-      createdAt: _parseDateTime(json['createdAt'] ?? json['created_at']),
+      scanId: _string(json['scanId']),
+      cropName: _string(json['cropName']),
+      cropNameAr: _string(json['cropNameAr']),
+      createdAt: _parseDateTime(json['createdAt']),
       status: _string(json['status']),
       severity: _optionalString(json['severity']),
       imageUrl: NetworkUrlHelper.normalizeRemoteUrl(
-        _string(json['imageUrl'] ?? json['image_url']),
+        _string(json['imageUrl']),
       ),
       diseaseName: _optionalString(
         json['diseaseName'] ??
             json['disease_name'] ??
             json['label'] ??
             json['textEn'] ??
-            json['text_en'],
+            json['text_en'] ??
+            diagnosisMap['diseaseName'] ??
+            diagnosisMap['disease_name'] ??
+            diagnosisMap['label'] ??
+            diagnosisMap['textEn'] ??
+            diagnosisMap['text_en'] ??
+            diseaseMap['diseaseName'] ??
+            diseaseMap['disease_name'] ??
+            diseaseMap['label'] ??
+            diseaseMap['textEn'] ??
+            diseaseMap['text_en'],
       ),
       diseaseNameAr: _optionalString(
         json['diseaseNameAr'] ??
             json['disease_name_ar'] ??
+            json['labelAr'] ??
             json['label_ar'] ??
             json['textAr'] ??
-            json['text_ar'],
+            json['text_ar'] ??
+            diagnosisMap['diseaseNameAr'] ??
+            diagnosisMap['disease_name_ar'] ??
+            diagnosisMap['labelAr'] ??
+            diagnosisMap['label_ar'] ??
+            diagnosisMap['textAr'] ??
+            diagnosisMap['text_ar'] ??
+            diseaseMap['diseaseNameAr'] ??
+            diseaseMap['disease_name_ar'] ??
+            diseaseMap['labelAr'] ??
+            diseaseMap['label_ar'] ??
+            diseaseMap['textAr'] ??
+            diseaseMap['text_ar'],
       ),
-      isHealthy: json['isHealthy'] == true || json['is_healthy'] == true,
+      isHealthy: json['isHealthy'] == true,
       confidence: _optionalConfidence(
-        json['confidence'] ?? json['confidenceScore'] ?? json['confidence_score'],
+        json['confidence'],
       ),
     );
   }

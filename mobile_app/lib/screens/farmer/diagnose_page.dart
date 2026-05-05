@@ -116,7 +116,13 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
 
   String _recentDiagnosisLabel(ScanHistoryItem item, AppLocalizations l10n) {
     final name = item.diseaseName?.trim();
-    if (name != null && name.isNotEmpty) return name;
+    if (name != null && name.isNotEmpty) {
+      return TranslationHelper.localizedDiseaseName(
+        context,
+        name,
+        item.diseaseNameAr,
+      );
+    }
     if (item.status == 'pending' || item.status == 'processing') {
       return l10n.analysisInProgress;
     }

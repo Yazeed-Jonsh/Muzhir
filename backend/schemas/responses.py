@@ -56,6 +56,12 @@ class ScanSummary(BaseModel):
         description="English disease label from diagnosis when available (same as diagnose label).",
         examples=["Early blight"],
     )
+    disease_name_ar: Optional[str] = Field(
+        default=None,
+        alias="diseaseNameAr",
+        description="Arabic disease label from diagnosis when available.",
+        examples=["اللفحة المبكرة"],
+    )
     is_healthy: bool = Field(
         alias="isHealthy",
         description="Whether the stored diagnosis marks the plant as healthy (false while pending).",

@@ -68,12 +68,6 @@ class _MainScaffoldState extends State<MainScaffold> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {
-              // TODO: Notifications – future sprint
-            },
-          ),
-          IconButton(
             icon: const Icon(Icons.person_outline_rounded),
             onPressed: () {
               Navigator.of(context).push<void>(
