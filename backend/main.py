@@ -8,6 +8,9 @@ from datetime import datetime, timezone
 import re
 from uuid import uuid4
 
+import psutil as _psutil
+_proc = _psutil.Process()
+
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -80,6 +83,45 @@ PROFILE_RESPONSES = {
     404: {"description": "User profile or profile image was not found."},
 }
 
+# Fallback Arabic labels when Firestore rows miss localized fields.
+_DISEASE_AR_FALLBACKS = {
+    "early blight": "اللفحة المبكرة",
+    "late blight": "اللفحة المتأخرة",
+    "tomato_mildiou": "البياض الزغبي",
+    "tomato mildiou": "البياض الزغبي",
+    "tomato brown spots": "بقع الطماطم البنية",
+    "corn brown spots": "بقع الذرة البنية",
+    "healthy": "سليم",
+    "no disease": "لا يوجد مرض",
+    "no disease detected": "لا يوجد مرض",
+    "unknown disease": "مرض غير معروف",
+}
+_CROP_AR_FALLBACKS = {
+    "tomato": "طماطم",
+    "potato": "بطاطس",
+    "corn": "ذرة",
+    "wheat": "قمح",
+}
+
+
+def _fallback_disease_name_ar(disease_name: str | None) -> str | None:
+    if disease_name is None:
+        return None
+    key = disease_name.strip().lower()
+    if not key:
+        return None
+    return _DISEASE_AR_FALLBACKS.get(key)
+
+
+def _fallback_crop_name_ar(crop_name: str | None) -> str | None:
+    if crop_name is None:
+        return None
+    key = crop_name.strip().lower()
+    if not key:
+        return None
+    return _CROP_AR_FALLBACKS.get(key)
+
+
 app = FastAPI(
     title="Muzhir (مُزهِر) API - Smart Agriculture System",
     version=settings.APP_VERSION,
@@ -129,7 +171,7 @@ def _validate_image_upload(image: UploadFile) -> None:
     },
 )
 async def health():
-    yolo_status = "Loaded" if getattr(app.state, "yolo_model", None) is not None else "Error"
+    yolo_status = "Loaded" if getattr(app.state, "onnx_session", None) is not None else "Error"
     firestore_status = "Error"
     errors: list[str] = []
 
@@ -363,7 +405,7 @@ async def diagnose(
             detail=f"Image upload failed: {exc}",
         ) from exc
 
-    model = app.state.yolo_model
+    model = app.state.onnx_session
     class_mapper = app.state.class_mapper
 
     try:
@@ -390,7 +432,14 @@ async def diagnose(
         set_scan_status(scan_id, "pending")
 
         set_scan_status(scan_id, "processing")
+        _mem_before = _proc.memory_info().rss / 1_048_576
         inference_result = run_inference(image_bytes, model)
+        _mem_after = _proc.memory_info().rss / 1_048_576
+        print(
+            f"MEM inference: before={_mem_before:.0f}MB "
+            f"after={_mem_after:.0f}MB "
+            f"delta={_mem_after - _mem_before:+.0f}MB"
+        )
         disease_name = "No disease detected"
         disease_name_ar = "لا يوجد مرض"
         confidence_score = 0.0
@@ -513,11 +562,11 @@ async def diagnose(
             "labelAr": disease_name_ar,
             "confidence": confidence_score,
             "is_healthy": is_healthy,
-            "boundingBox": None if is_healthy or inference is None else {
-                "x": inference.bbox["x"],
-                "y": inference.bbox["y"],
-                "width": inference.bbox["w"],
-                "height": inference.bbox["h"],
+            "boundingBox": None if is_healthy or inference_result is None else {
+                "x": inference_result.bbox["x"],
+                "y": inference_result.bbox["y"],
+                "width": inference_result.bbox["w"],
+                "height": inference_result.bbox["h"],
             },
         },
         recommendation=recommendation_payload,
@@ -731,11 +780,11 @@ async def get_history(
             or crop.get("cropId")
             or "Unknown"
         )
-        crop_name_ar = (
-            data.get("cropNameAr")
-            or crop.get("cropNameAr")
-            or crop_name
-        )
+        crop_name_ar_raw = data.get("cropNameAr") or crop.get("cropNameAr")
+        if crop_name_ar_raw is None or str(crop_name_ar_raw).strip() == "":
+            crop_name_ar = _fallback_crop_name_ar(str(crop_name)) or str(crop_name)
+        else:
+            crop_name_ar = str(crop_name_ar_raw).strip()
         created_at = data.get("createdAt") or data.get("timestamp") or datetime.now(
             timezone.utc
         )
@@ -750,12 +799,51 @@ async def get_history(
             data.get("diseaseName")
             or diagnosis.get("diseaseName")
             or disease.get("diseaseName")
+            or data.get("label")
+            or diagnosis.get("label")
+            or disease.get("label")
+            or data.get("textEn")
+            or data.get("text_en")
+            or diagnosis.get("disease_en")
+            or disease.get("disease_en")
+            or diagnosis.get("textEn")
+            or diagnosis.get("text_en")
+            or disease.get("textEn")
+            or disease.get("text_en")
         )
         disease_name_value: str | None
         if disease_name_raw is None or str(disease_name_raw).strip() == "":
             disease_name_value = None
         else:
             disease_name_value = str(disease_name_raw).strip()
+
+        disease_name_ar_raw = (
+            data.get("diseaseNameAr")
+            or data.get("disease_name_ar")
+            or data.get("labelAr")
+            or data.get("label_ar")
+            or data.get("textAr")
+            or data.get("text_ar")
+            or diagnosis.get("diseaseNameAr")
+            or diagnosis.get("disease_name_ar")
+            or diagnosis.get("labelAr")
+            or diagnosis.get("label_ar")
+            or diagnosis.get("textAr")
+            or diagnosis.get("text_ar")
+            or disease.get("diseaseNameAr")
+            or disease.get("disease_name_ar")
+            or disease.get("labelAr")
+            or disease.get("label_ar")
+            or disease.get("textAr")
+            or disease.get("text_ar")
+            or diagnosis.get("disease_ar")
+            or disease.get("disease_ar")
+        )
+        disease_name_ar_value: str | None
+        if disease_name_ar_raw is None or str(disease_name_ar_raw).strip() == "":
+            disease_name_ar_value = _fallback_disease_name_ar(disease_name_value)
+        else:
+            disease_name_ar_value = str(disease_name_ar_raw).strip()
 
         status_str = str(status_value).lower() if status_value else ""
         if status_str in ("pending", "processing"):
@@ -778,6 +866,7 @@ async def get_history(
                 severity=severity_value,
                 image_url=str(image_url),
                 disease_name=disease_name_value,
+                disease_name_ar=disease_name_ar_value,
                 is_healthy=is_healthy_value,
                 confidence=confidence_value,
             )
@@ -1010,12 +1099,31 @@ async def get_scan(
     )
     disease_name = str(
         data.get("diseaseName")
+        or data.get("disease_name")
+        or data.get("label")
+        or data.get("textEn")
+        or data.get("text_en")
         or diagnosis_data.get("disease", {}).get("diseaseName")
+        or diagnosis_data.get("disease", {}).get("disease_name")
+        or diagnosis_data.get("disease", {}).get("label")
+        or diagnosis_data.get("disease", {}).get("textEn")
+        or diagnosis_data.get("disease", {}).get("text_en")
         or "No disease detected"
     )
     disease_name_ar = str(
         data.get("diseaseNameAr")
+        or data.get("disease_name_ar")
+        or data.get("labelAr")
+        or data.get("label_ar")
+        or data.get("textAr")
+        or data.get("text_ar")
         or diagnosis_data.get("disease", {}).get("diseaseNameAr")
+        or diagnosis_data.get("disease", {}).get("disease_name_ar")
+        or diagnosis_data.get("disease", {}).get("labelAr")
+        or diagnosis_data.get("disease", {}).get("label_ar")
+        or diagnosis_data.get("disease", {}).get("textAr")
+        or diagnosis_data.get("disease", {}).get("text_ar")
+        or _fallback_disease_name_ar(disease_name)
         or ("لا يوجد مرض" if disease_name.lower() == "no disease detected" else disease_name)
     )
     severity = _severity_from_confidence(confidence_score)

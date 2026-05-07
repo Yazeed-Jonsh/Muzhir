@@ -116,7 +116,14 @@ class DiagnosisResponse {
     }
 
     var label = _string(
-      diseaseMap['diseaseName'] ?? json['diseaseName'] ?? json['label'],
+      diseaseMap['diseaseName'] ??
+          diseaseMap['disease_name'] ??
+          diseaseMap['label'] ??
+          diseaseMap['textEn'] ??
+          diseaseMap['text_en'] ??
+          json['diseaseName'] ??
+          json['disease_name'] ??
+          json['label'],
     );
     if (label.isEmpty) {
       label = '—';
@@ -125,8 +132,15 @@ class DiagnosisResponse {
     final labelAr = _optionalLabelAr(
       diseaseMap['diseaseNameAr'] ??
           diseaseMap['disease_name_ar'] ??
+          diseaseMap['labelAr'] ??
+          diseaseMap['label_ar'] ??
+          diseaseMap['textAr'] ??
+          diseaseMap['text_ar'] ??
+          diseaseMap['disease_ar'] ??
           json['diseaseNameAr'] ??
-          json['disease_name_ar'],
+          json['disease_name_ar'] ??
+          json['labelAr'] ??
+          json['label_ar'],
     );
 
     final isHealthy = json['isHealthy'] == true ||

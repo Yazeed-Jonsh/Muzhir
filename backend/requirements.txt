@@ -4,10 +4,10 @@ pydantic[email]>=2.6
 pydantic-settings>=2.2
 numpy
 opencv-python-headless
-ultralytics
 onnxruntime
 groq
 python-dotenv
 python-multipart
 cloudinary
 firebase-admin
+psutil
