@@ -1,12 +1,6 @@
 """Inference runner: direct ONNX Runtime decoding — no ultralytics/torch.
 
-YOLOv8 ONNX export format (Ultralytics default, no NMS in graph):
-  Input  : (1, 3, 640, 640) float32 [0, 1]
-  Output : (1, 4 + nc, num_anchors)  — cx/cy/w/h in pixel coords, then
-           per-class probabilities (sigmoid already applied).
-
-We transpose to (num_anchors, 4+nc), pick the anchor with the highest
-max-class score, and convert bbox to normalised xywh.
+Handles both standard YOLOv8 ONNX export and NMS-included export.
 """
 
 from __future__ import annotations
@@ -56,30 +50,60 @@ def run_inference(
     output_name = session.get_outputs()[0].name
     raw = session.run([output_name], {input_name: tensor})[0]  # (1, ?, ?)
 
-    # Standard YOLOv8 export: (1, 4+nc, num_anchors) — axis-1 is smaller.
-    # Transpose so rows are anchors and columns are [cx, cy, w, h, *scores].
-    preds = raw[0].T if raw.shape[1] < raw.shape[2] else raw[0]
+    # Check if the model includes NMS (Output shape: [1, num_detections, 6])
+    # where 6 is [x1, y1, x2, y2, conf, class_id]
+    if len(raw.shape) == 3 and raw.shape[2] == 6:
+        preds = raw[0]  # (num_detections, 6)
+        if len(preds) == 0:
+            return None
+        
+        # Find the detection with the highest confidence
+        best_idx = int(preds[:, 4].argmax())
+        best_conf = float(preds[best_idx, 4])
+        
+        if best_conf < settings.MIN_CONFIDENCE_THRESHOLD:
+            return None
+            
+        class_id = int(preds[best_idx, 5])
+        
+        # Bbox: x1, y1, x2, y2 in pixel coords -> normalized x, y, w, h
+        x1 = float(preds[best_idx, 0])
+        y1 = float(preds[best_idx, 1])
+        x2 = float(preds[best_idx, 2])
+        y2 = float(preds[best_idx, 3])
+        
+        s = 640.0
+        w = max(0.0, x2 - x1)
+        h = max(0.0, y2 - y1)
+        x = max(0.0, min(1.0, x1 / s))
+        y = max(0.0, min(1.0, y1 / s))
+        
+    else:
+        # Standard YOLOv8 export: (1, 4+nc, num_anchors)
+        # Transpose so rows are anchors and columns are [cx, cy, w, h, *scores].
+        preds = raw[0].T if raw.shape[1] < raw.shape[2] else raw[0]
 
-    scores = preds[:, 4:]         # (num_anchors, nc)
-    conf = scores.max(axis=1)     # (num_anchors,)
-    best_idx = int(conf.argmax())
-    best_conf = float(conf[best_idx])
+        scores = preds[:, 4:]         # (num_anchors, nc)
+        conf = scores.max(axis=1)     # (num_anchors,)
+        best_idx = int(conf.argmax())
+        best_conf = float(conf[best_idx])
 
-    if best_conf < settings.MIN_CONFIDENCE_THRESHOLD:
-        return None
+        if best_conf < settings.MIN_CONFIDENCE_THRESHOLD:
+            return None
 
-    class_id = int(scores[best_idx].argmax())
+        class_id = int(scores[best_idx].argmax())
+
+        # Bbox: cx, cy, w, h in pixel coords → normalised x1, y1, w, h
+        cx = float(preds[best_idx, 0])
+        cy = float(preds[best_idx, 1])
+        w = float(preds[best_idx, 2])
+        h = float(preds[best_idx, 3])
+        s = 640.0
+        x = max(0.0, min(1.0, (cx - w / 2) / s))
+        y = max(0.0, min(1.0, (cy - h / 2) / s))
+
     names = _parse_class_names(session)
     yolo_label = names.get(class_id, f"class_{class_id}")
-
-    # Bbox: cx, cy, w, h in pixel coords → normalised x1, y1, w, h
-    cx = float(preds[best_idx, 0])
-    cy = float(preds[best_idx, 1])
-    w = float(preds[best_idx, 2])
-    h = float(preds[best_idx, 3])
-    s = 640.0
-    x = max(0.0, min(1.0, (cx - w / 2) / s))
-    y = max(0.0, min(1.0, (cy - h / 2) / s))
 
     return InferenceResult(
         class_id=class_id,
