@@ -180,11 +180,17 @@ class ApiService {
   /// Optional [crop] filters by stored `cropId` (e.g. `tomato`, `corn`). Each item is parsed
   /// with [DiagnosisResponse.fromMapMarkerJson] (minimal fields: scan id, coordinates,
   /// [DiagnosisResponse.cropType], [DiagnosisSection.isHealthy]).
-  Future<List<DiagnosisResponse>> getMapMarkers({String? crop}) async {
+  Future<List<DiagnosisResponse>> getMapMarkers({
+    String? crop,
+    DateTime? startAt,
+    DateTime? endAt,
+  }) async {
     final response = await _dio.get<dynamic>(
       '/map-markers',
       queryParameters: <String, dynamic>{
         if (crop != null && crop.trim().isNotEmpty) 'crop': crop.trim(),
+        if (startAt != null) 'startAt': startAt.toUtc().toIso8601String(),
+        if (endAt != null) 'endAt': endAt.toUtc().toIso8601String(),
       },
     );
 

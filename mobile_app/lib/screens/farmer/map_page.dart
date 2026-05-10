@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +12,7 @@ import 'package:muzhir/core/utils/translation_helper.dart';
 import 'package:muzhir/l10n/app_localizations.dart';
 import 'package:muzhir/models/diagnosis_response.dart';
 import 'package:muzhir/providers/connectivity_provider.dart';
+import 'package:muzhir/providers/map_analytics_provider.dart';
 import 'package:muzhir/providers/scan_history_provider.dart';
 import 'package:muzhir/screens/farmer/diagnosis_result_detail_screen.dart';
 import 'package:muzhir/services/pending_upload_store.dart';
@@ -46,6 +48,9 @@ class _MapPageState extends ConsumerState<MapPage> {
   bool _didAutoCenterOnUser = false;
 
   List<DiagnosisResponse> _scanMarkers = [];
+  List<DiagnosisResponse> _windowCurrentMarkers = [];
+  List<DiagnosisResponse> _windowPreviousMarkers = [];
+  List<FakeHeatmapPoint> _fakeHeatmapPoints = [];
   bool _markersLoading = true;
   String? _markersError;
   _MapHealthFilter _selectedHealthFilter = _MapHealthFilter.all;
@@ -57,7 +62,8 @@ class _MapPageState extends ConsumerState<MapPage> {
   void initState() {
     super.initState();
     _mapController = MapController();
-    _loadMapMarkers();
+    _loadMapMarkers(analyticsOverride: ref.read(mapAnalyticsProvider));
+    _loadFakeHeatmapPoints();
     _loadPendingUploads();
     if (widget.isTabVisible) {
       _refreshUserLocation(autoCenterOnFirstFix: true);
@@ -83,24 +89,51 @@ class _MapPageState extends ConsumerState<MapPage> {
     return isHealthy ? MuzhirColors.coreLeafGreen : MuzhirColors.earthyClayRed;
   }
 
-  Future<void> _loadMapMarkers() async {
+  Future<void> _loadMapMarkers({MapAnalyticsState? analyticsOverride}) async {
+    final MapAnalyticsState analytics =
+        analyticsOverride ?? ref.read(mapAnalyticsProvider);
+    final currentWindow = _windowRange(
+      previousWindow: false,
+      analytics: analytics,
+    );
+    final previousWindow = _windowRange(
+      previousWindow: true,
+      analytics: analytics,
+    );
     if (!mounted) return;
     setState(() {
       _markersLoading = true;
       _markersError = null;
       _scanMarkers = [];
+      _windowCurrentMarkers = [];
+      _windowPreviousMarkers = [];
     });
     try {
-      final list = await ApiService().getMapMarkers();
+      final currentList = await ApiService().getMapMarkers(
+        startAt: currentWindow.start,
+        endAt: currentWindow.end,
+      );
+      final previousList = analytics.compareWithPreviousWindow
+          ? await ApiService().getMapMarkers(
+              startAt: previousWindow.start,
+              endAt: previousWindow.end,
+            )
+          : const <DiagnosisResponse>[];
+      final combined = <DiagnosisResponse>[
+        ...currentList,
+        ...previousList,
+      ];
       // Persist for offline use.
       await PendingUploadStore.saveMarkers(
-          list.map((d) => d.toMap()).toList());
+          combined.map((d) => d.toMap()).toList());
       if (!mounted) return;
       setState(() {
-        _scanMarkers = list;
+        _windowCurrentMarkers = currentList;
+        _windowPreviousMarkers = previousList;
+        _scanMarkers = combined;
         _markersLoading = false;
       });
-      _fitAllMarkersVisible();
+      _fitAllMarkersVisible(currentList);
     } on DioException catch (e) {
       if (!mounted) return;
       final cached = await _loadCachedMarkers();
@@ -109,6 +142,8 @@ class _MapPageState extends ConsumerState<MapPage> {
         _markersLoading = false;
         _markersError = cached.isEmpty ? _messageFromDio(e) : null;
         _scanMarkers = cached;
+        _windowCurrentMarkers = cached;
+        _windowPreviousMarkers = const [];
       });
       if (cached.isNotEmpty) _fitAllMarkersVisible();
     } catch (e) {
@@ -119,6 +154,8 @@ class _MapPageState extends ConsumerState<MapPage> {
         _markersLoading = false;
         _markersError = cached.isEmpty ? e.toString() : null;
         _scanMarkers = cached;
+        _windowCurrentMarkers = cached;
+        _windowPreviousMarkers = const [];
       });
       if (cached.isNotEmpty) _fitAllMarkersVisible();
     }
@@ -140,6 +177,106 @@ class _MapPageState extends ConsumerState<MapPage> {
     final uploads = await PendingUploadStore.loadQueue();
     if (!mounted) return;
     setState(() => _pendingUploads = uploads);
+  }
+
+  Future<void> _loadFakeHeatmapPoints() async {
+    final points = await PendingUploadStore.loadFakeHeatmapPoints();
+    if (!mounted) return;
+    setState(() => _fakeHeatmapPoints = points);
+  }
+
+  Future<void> _saveFakeHeatmapPoints() async {
+    await PendingUploadStore.saveFakeHeatmapPoints(_fakeHeatmapPoints);
+  }
+
+  Future<void> _clearFakeHeatmapPoints() async {
+    await PendingUploadStore.clearFakeHeatmapPoints();
+    if (!mounted) return;
+    setState(() => _fakeHeatmapPoints = []);
+  }
+
+  Future<void> _seedFakeSaudiHotspots() async {
+    final now = DateTime.now().toUtc();
+    final seeded = <FakeHeatmapPoint>[
+      // Riyadh cluster
+      FakeHeatmapPoint(
+        latitude: 24.7136,
+        longitude: 46.6753,
+        diseaseName: 'Early blight',
+        createdAt: now.subtract(const Duration(days: 1)),
+      ),
+      FakeHeatmapPoint(
+        latitude: 24.7202,
+        longitude: 46.6827,
+        diseaseName: 'Early blight',
+        createdAt: now.subtract(const Duration(days: 2)),
+      ),
+      FakeHeatmapPoint(
+        latitude: 24.7064,
+        longitude: 46.6681,
+        diseaseName: 'Late blight',
+        createdAt: now.subtract(const Duration(days: 6)),
+      ),
+      // Jeddah cluster
+      FakeHeatmapPoint(
+        latitude: 21.5433,
+        longitude: 39.1728,
+        diseaseName: 'Leaf spot',
+        createdAt: now.subtract(const Duration(days: 4)),
+      ),
+      FakeHeatmapPoint(
+        latitude: 21.5319,
+        longitude: 39.1613,
+        diseaseName: 'Leaf spot',
+        createdAt: now.subtract(const Duration(days: 8)),
+      ),
+      FakeHeatmapPoint(
+        latitude: 21.5537,
+        longitude: 39.1829,
+        diseaseName: 'Leaf spot',
+        createdAt: now.subtract(const Duration(days: 10)),
+      ),
+      // Dammam cluster
+      FakeHeatmapPoint(
+        latitude: 26.4207,
+        longitude: 50.0888,
+        diseaseName: 'Rust',
+        createdAt: now.subtract(const Duration(days: 3)),
+      ),
+      FakeHeatmapPoint(
+        latitude: 26.4119,
+        longitude: 50.1031,
+        diseaseName: 'Rust',
+        createdAt: now.subtract(const Duration(days: 11)),
+      ),
+      FakeHeatmapPoint(
+        latitude: 26.4294,
+        longitude: 50.0746,
+        diseaseName: 'Rust',
+        createdAt: now.subtract(const Duration(days: 15)),
+      ),
+    ];
+    if (!mounted) return;
+    setState(() => _fakeHeatmapPoints = seeded);
+    await _saveFakeHeatmapPoints();
+  }
+
+  Future<void> _addFakePointFromTap(
+    LatLng point,
+    MapAnalyticsState analytics,
+  ) async {
+    final fallbackDisease = analytics.selectedDiseaseName ?? 'Early blight';
+    final next = FakeHeatmapPoint(
+      latitude: point.latitude,
+      longitude: point.longitude,
+      diseaseName: fallbackDisease,
+      createdAt: DateTime.now().toUtc(),
+    );
+    if (!mounted) return;
+    setState(() {
+      _fakeHeatmapPoints = [..._fakeHeatmapPoints, next];
+    });
+    await _saveFakeHeatmapPoints();
   }
 
   /// Uploads all queued offline scans and refreshes markers on success.
@@ -254,6 +391,233 @@ class _MapPageState extends ConsumerState<MapPage> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
             );
           },
+        ),
+      ),
+    );
+  }
+
+  Duration _durationForPreset(MapTimePreset preset) {
+    switch (preset) {
+      case MapTimePreset.last24Hours:
+        return const Duration(hours: 24);
+      case MapTimePreset.last7Days:
+        return const Duration(days: 7);
+      case MapTimePreset.last30Days:
+        return const Duration(days: 30);
+    }
+  }
+
+  String _timePresetLabel(MapTimePreset preset, AppLocalizations l10n) {
+    switch (preset) {
+      case MapTimePreset.last24Hours:
+        return l10n.last24h;
+      case MapTimePreset.last7Days:
+        return l10n.last7d;
+      case MapTimePreset.last30Days:
+        return l10n.last30d;
+    }
+  }
+
+  DateTimeRange _windowRange({
+    required bool previousWindow,
+    required MapAnalyticsState analytics,
+  }) {
+    final now = DateTime.now().toUtc();
+    final duration = _durationForPreset(analytics.timePreset);
+    if (!previousWindow) {
+      return DateTimeRange(start: now.subtract(duration), end: now);
+    }
+    final end = now.subtract(duration);
+    return DateTimeRange(start: end.subtract(duration), end: end);
+  }
+
+  bool _matchesDiseaseFilter(DiagnosisResponse scan, MapAnalyticsState analytics) {
+    final selected = analytics.selectedDiseaseName;
+    if (selected == null || selected.isEmpty) return true;
+    return scan.diagnosis.label.toLowerCase() == selected.toLowerCase();
+  }
+
+  List<DiagnosisResponse> _heatmapWindowPoints({
+    required bool previousWindow,
+    required MapAnalyticsState analytics,
+  }) {
+    final source = previousWindow ? _windowPreviousMarkers : _windowCurrentMarkers;
+    return source.where((scan) {
+      if (scan.latitude == null || scan.longitude == null) return false;
+      if (scan.diagnosis.isHealthy) return false;
+      if (!_matchesDiseaseFilter(scan, analytics)) return false;
+      return true;
+    }).toList();
+  }
+
+  List<DiagnosisResponse> _fakeWindowPoints({
+    required bool previousWindow,
+    required MapAnalyticsState analytics,
+  }) {
+    final window = _windowRange(previousWindow: previousWindow, analytics: analytics);
+    final filtered = _fakeHeatmapPoints.where((point) {
+      final at = point.createdAt.toUtc();
+      final inWindow = !at.isBefore(window.start) && !at.isAfter(window.end);
+      if (!inWindow) return false;
+      final selected = analytics.selectedDiseaseName;
+      if (selected == null || selected.isEmpty) return true;
+      return point.diseaseName.toLowerCase() == selected.toLowerCase();
+    }).toList();
+    return filtered
+        .asMap()
+        .entries
+        .map((entry) => _toFakeDiagnosisResponse(entry.value, entry.key))
+        .toList();
+  }
+
+  DiagnosisResponse _toFakeDiagnosisResponse(FakeHeatmapPoint point, int index) {
+    return DiagnosisResponse(
+      scanId: 'fake_${point.createdAt.microsecondsSinceEpoch}_$index',
+      imageUrl: '',
+      diagnosis: DiagnosisSection(
+        label: point.diseaseName,
+        confidence: 1.0,
+        isHealthy: false,
+      ),
+      recommendation: const RecommendationSection(textAr: '', textEn: ''),
+      latitude: point.latitude,
+      longitude: point.longitude,
+      cropType: 'Fake',
+      scannedAt: point.createdAt.toUtc(),
+    );
+  }
+
+  Widget _buildAnalyticsBar(
+    List<String> diseaseNames,
+    MapAnalyticsState analytics,
+    MapAnalyticsNotifier analyticsNotifier,
+  ) {
+    final l10n = AppLocalizations.of(context)!;
+    return Material(
+      color: MuzhirColors.creamScaffold,
+      elevation: 1,
+      shadowColor: MuzhirColors.deepCharcoal.withValues(alpha: 0.08),
+      child: SizedBox(
+        height: 56,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          children: [
+            FilterChip(
+              label: Text(l10n.heatmap),
+              selected: analytics.showHeatmap,
+              onSelected: analyticsNotifier.setShowHeatmap,
+            ),
+            const SizedBox(width: 8),
+            FilterChip(
+              label: Text(l10n.compare),
+              selected: analytics.compareWithPreviousWindow,
+              onSelected: analytics.showHeatmap
+                  ? analyticsNotifier.setCompareWithPreviousWindow
+                  : null,
+            ),
+            const SizedBox(width: 8),
+            Container(
+              width: 170,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: MuzhirColors.deepCharcoal.withValues(alpha: 0.16),
+                ),
+                color: MuzhirColors.cardWhite,
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: analytics.selectedDiseaseName ?? l10n.allDiseases,
+                  isExpanded: true,
+                  items: <String>[l10n.allDiseases, ...diseaseNames]
+                      .map((name) => DropdownMenuItem<String>(
+                            value: name,
+                            child: Text(
+                              name,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          ))
+                      .toList(),
+                  onChanged: (value) {
+                    if (value == null) return;
+                    analyticsNotifier.setSelectedDiseaseName(
+                      value == l10n.allDiseases ? null : value,
+                    );
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            ...MapTimePreset.values.map((preset) {
+              final selected = preset == analytics.timePreset;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(_timePresetLabel(preset, l10n)),
+                  selected: selected,
+                  onSelected: (v) {
+                    if (!v) return;
+                    analyticsNotifier.setTimePreset(preset);
+                  },
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDeveloperFakeBar(
+    MapAnalyticsState analytics,
+    MapAnalyticsNotifier analyticsNotifier,
+  ) {
+    final l10n = AppLocalizations.of(context)!;
+    return Material(
+      color: MuzhirColors.creamScaffold,
+      elevation: 1,
+      shadowColor: MuzhirColors.deepCharcoal.withValues(alpha: 0.08),
+      child: SizedBox(
+        height: 56,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          children: [
+            FilterChip(
+              label: Text(l10n.devFakeMode),
+              selected: analytics.fakeModeEnabled,
+              onSelected: (value) {
+                analyticsNotifier.setFakeModeEnabled(value);
+              },
+            ),
+            const SizedBox(width: 8),
+            FilterChip(
+              label: Text(l10n.tapToAdd),
+              selected: analytics.fakeTapInsertEnabled,
+              onSelected: analytics.fakeModeEnabled
+                  ? analyticsNotifier.setFakeTapInsertEnabled
+                  : null,
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
+              onPressed: analytics.fakeModeEnabled ? _seedFakeSaudiHotspots : null,
+              icon: const Icon(Icons.auto_fix_high_outlined),
+              label: Text(l10n.seedSaudiPoints),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
+              onPressed: analytics.fakeModeEnabled ? _clearFakeHeatmapPoints : null,
+              icon: const Icon(Icons.delete_outline),
+              label: Text(l10n.clearFakeData),
+            ),
+            const SizedBox(width: 8),
+            Chip(
+              label: Text(l10n.fakeDataCount(_fakeHeatmapPoints.length)),
+            ),
+          ],
         ),
       ),
     );
@@ -665,8 +1029,22 @@ class _MapPageState extends ConsumerState<MapPage> {
         _drainPendingUploads();
       }
     });
+    ref.listen<MapAnalyticsState>(mapAnalyticsProvider, (prev, next) {
+      final shouldRefetch = prev == null ||
+          prev.fakeModeEnabled != next.fakeModeEnabled ||
+          prev.timePreset != next.timePreset ||
+          prev.compareWithPreviousWindow != next.compareWithPreviousWindow;
+      if (next.fakeModeEnabled) {
+        return;
+      }
+      if (shouldRefetch) {
+        _loadMapMarkers(analyticsOverride: next);
+      }
+    });
 
     final historyAsync = ref.watch(scanHistoryProvider);
+    final analytics = ref.watch(mapAnalyticsProvider);
+    final analyticsNotifier = ref.read(mapAnalyticsProvider.notifier);
     final l10n = AppLocalizations.of(context)!;
     final scheme = Theme.of(context).colorScheme;
     final mapBlue = Theme.of(context).extension<MuzhirFeatureColors>()!.mapUserLocationBlue;
@@ -674,8 +1052,36 @@ class _MapPageState extends ConsumerState<MapPage> {
       for (final item in historyAsync.asData?.value ?? const [])
         item.scanId: item.isHealthy,
     };
+    final fakeCurrentPoints = _fakeWindowPoints(
+      previousWindow: false,
+      analytics: analytics,
+    );
+    final fakePreviousPoints = analytics.compareWithPreviousWindow
+        ? _fakeWindowPoints(
+            previousWindow: true,
+            analytics: analytics,
+          )
+        : const <DiagnosisResponse>[];
+    final allDisplayPoints = analytics.fakeModeEnabled
+        ? <DiagnosisResponse>[...fakeCurrentPoints, ...fakePreviousPoints]
+        : _scanMarkers;
 
-    final visibleMarkers = _scanMarkers.where((scan) {
+    final diseaseOptions = allDisplayPoints
+        .where((scan) => !scan.diagnosis.isHealthy)
+        .map((scan) => scan.diagnosis.label.trim())
+        .where((name) => name.isNotEmpty && name != '—')
+        .toSet()
+        .toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+    final visibleSource = analytics.fakeModeEnabled
+        ? fakeCurrentPoints
+        : _windowCurrentMarkers;
+    final visibleMarkers = visibleSource.where((scan) {
+      if (analytics.fakeModeEnabled) {
+        if (!_matchesDiseaseFilter(scan, analytics)) return false;
+        return true;
+      }
       final historicalHealth = historyByScanId[scan.scanId];
       if (historyAsync.hasValue && historicalHealth == null) {
         // Keep map and history synced: if history no longer has this scan, hide it.
@@ -690,7 +1096,22 @@ class _MapPageState extends ConsumerState<MapPage> {
         case _MapHealthFilter.all:
           return true;
       }
+    }).where((scan) {
+      if (!_matchesDiseaseFilter(scan, analytics)) return false;
+      return true;
     }).toList();
+
+    final currentHeatPoints = analytics.fakeModeEnabled
+        ? fakeCurrentPoints
+        : _heatmapWindowPoints(
+            previousWindow: false,
+            analytics: analytics,
+          );
+    final previousHeatPoints = analytics.compareWithPreviousWindow
+        ? (analytics.fakeModeEnabled
+            ? fakePreviousPoints
+            : _heatmapWindowPoints(previousWindow: true, analytics: analytics))
+        : const <DiagnosisResponse>[];
 
     final markerWidgets = visibleMarkers
         .where((d) => d.latitude != null && d.longitude != null)
@@ -703,7 +1124,7 @@ class _MapPageState extends ConsumerState<MapPage> {
         height: 48,
         alignment: Alignment.topCenter,
         child: GestureDetector(
-          onTap: () => _onMarkerTapped(d.scanId),
+          onTap: analytics.fakeModeEnabled ? null : () => _onMarkerTapped(d.scanId),
           child: Icon(
             Icons.location_on_rounded,
             size: 44,
@@ -719,20 +1140,52 @@ class _MapPageState extends ConsumerState<MapPage> {
         ),
       );
     }).toList();
+    final currentHeatCircles = currentHeatPoints
+        .map(
+          (d) => CircleMarker(
+            point: LatLng(d.latitude!, d.longitude!),
+            radius: 24,
+            color: MuzhirColors.earthyClayRed.withValues(alpha: 0.18),
+          ),
+        )
+        .toList();
+    final previousHeatCircles = previousHeatPoints
+        .map(
+          (d) => CircleMarker(
+            point: LatLng(d.latitude!, d.longitude!),
+            radius: 24,
+            color: MuzhirColors.earthyClayRed.withValues(alpha: 0.12),
+          ),
+        )
+        .toList();
+    final fitTarget = analytics.showHeatmap
+        ? (analytics.compareWithPreviousWindow
+            ? <DiagnosisResponse>[...currentHeatPoints, ...previousHeatPoints]
+            : currentHeatPoints)
+        : visibleMarkers;
 
     return Column(
       children: [
         _buildHealthFilterBar(),
+        _buildAnalyticsBar(diseaseOptions, analytics, analyticsNotifier),
+        if (kDebugMode) _buildDeveloperFakeBar(analytics, analyticsNotifier),
         Expanded(
           child: Stack(
             children: [
               FlutterMap(
                 mapController: _mapController,
-                options: const MapOptions(
+                options: MapOptions(
                   initialCenter: _defaultCenter,
                   initialZoom: _initialZoom,
                   minZoom: 3.0,
-                  interactionOptions: InteractionOptions(
+                  onTap: (_, latLng) {
+                    if (!analytics.fakeModeEnabled ||
+                        !analytics.fakeTapInsertEnabled) {
+                      return;
+                    }
+                    _addFakePointFromTap(latLng, analytics);
+                  },
+                  interactionOptions: const InteractionOptions(
                     flags: InteractiveFlag.all,
                   ),
                 ),
@@ -767,7 +1220,20 @@ class _MapPageState extends ConsumerState<MapPage> {
                       return tileWidget;
                     },
                   ),
-                  MarkerLayer(markers: markerWidgets),
+                  if (analytics.showHeatmap && previousHeatCircles.isNotEmpty)
+                    CircleLayer(circles: previousHeatCircles),
+                  if (analytics.showHeatmap &&
+                      analytics.compareWithPreviousWindow &&
+                      currentHeatCircles.isNotEmpty)
+                    ClipRect(
+                      clipper: _LeftSwipeClipper(analytics.comparisonSlider),
+                      child: CircleLayer(circles: currentHeatCircles),
+                    ),
+                  if (analytics.showHeatmap &&
+                      !analytics.compareWithPreviousWindow &&
+                      currentHeatCircles.isNotEmpty)
+                    CircleLayer(circles: currentHeatCircles),
+                  if (!analytics.showHeatmap) MarkerLayer(markers: markerWidgets),
                   if (_pendingUploads.isNotEmpty)
                     MarkerLayer(
                       markers: _pendingUploads
@@ -923,9 +1389,9 @@ class _MapPageState extends ConsumerState<MapPage> {
                   children: [
                     FloatingActionButton(
                       heroTag: 'map_fit_all_markers',
-                      onPressed: markerWidgets.isEmpty
+                      onPressed: fitTarget.isEmpty
                           ? null
-                          : () => _fitAllMarkersVisible(visibleMarkers),
+                          : () => _fitAllMarkersVisible(fitTarget),
                       tooltip: l10n.showAllMarkers,
                       child: const Icon(Icons.zoom_out_map),
                     ),
@@ -939,11 +1405,50 @@ class _MapPageState extends ConsumerState<MapPage> {
                   ],
                 ),
               ),
+              if (analytics.showHeatmap && analytics.compareWithPreviousWindow)
+                Positioned(
+                  left: 20,
+                  right: 20,
+                  bottom: 10,
+                  child: Material(
+                    color: scheme.surface.withValues(alpha: 0.92),
+                    elevation: 2,
+                    borderRadius: BorderRadius.circular(16),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      child: Slider(
+                        value: analytics.comparisonSlider,
+                        min: 0.0,
+                        max: 1.0,
+                        divisions: 100,
+                        label: '${(analytics.comparisonSlider * 100).round()}%',
+                        onChanged: analyticsNotifier.setComparisonSlider,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
       ],
     );
+  }
+}
+
+class _LeftSwipeClipper extends CustomClipper<Rect> {
+  _LeftSwipeClipper(this.fraction);
+
+  final double fraction;
+
+  @override
+  Rect getClip(Size size) {
+    final x = size.width * fraction.clamp(0.0, 1.0);
+    return Rect.fromLTRB(0, 0, x, size.height);
+  }
+
+  @override
+  bool shouldReclip(covariant _LeftSwipeClipper oldClipper) {
+    return oldClipper.fraction != fraction;
   }
 }
 

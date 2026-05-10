@@ -886,6 +886,22 @@ def _capture_coordinate(value: object) -> float | None:
         return None
 
 
+def _parse_query_datetime(raw: str | None, field_name: str) -> datetime | None:
+    if raw is None or not raw.strip():
+        return None
+    normalized = raw.strip().replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{field_name} must be a valid ISO-8601 datetime.",
+        ) from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
 def _scan_is_healthy_row(data: dict, disease_label: str) -> bool:
     if data.get("isHealthy") is True:
         return True
@@ -934,12 +950,24 @@ async def get_map_markers(
         None,
         description="Optional crop id filter (e.g. tomato, corn).",
     ),
+    startAt: str | None = Query(
+        None,
+        description="Optional UTC start time (ISO-8601), inclusive.",
+    ),
+    endAt: str | None = Query(
+        None,
+        description="Optional UTC end time (ISO-8601), inclusive.",
+    ),
     limit: int = Query(200, ge=1, le=500),
     user_id: str = Depends(verify_token),
 ) -> list[MapMarkerItem]:
     """Geolocated pins for the mobile map; skips scans without capture coordinates."""
     normalized_user_id = user_id.strip()
     normalized_crop_id = crop.strip() if crop and crop.strip() else None
+    start_at = _parse_query_datetime(startAt, "startAt")
+    end_at = _parse_query_datetime(endAt, "endAt")
+    if start_at is not None and end_at is not None and start_at > end_at:
+        raise HTTPException(status_code=400, detail="startAt must be <= endAt.")
 
     try:
         scans_query = get_firestore_client().collection("scans").where(
@@ -947,6 +975,10 @@ async def get_map_markers(
         )
         if normalized_crop_id is not None:
             scans_query = scans_query.where("cropId", "==", normalized_crop_id)
+        if start_at is not None:
+            scans_query = scans_query.where("createdAt", ">=", start_at)
+        if end_at is not None:
+            scans_query = scans_query.where("createdAt", "<=", end_at)
         scans_query = scans_query.order_by(
             "createdAt", direction=firestore.Query.DESCENDING
         ).limit(limit)
@@ -988,6 +1020,26 @@ async def get_map_markers(
             if disease_name_raw is not None and str(disease_name_raw).strip()
             else "No disease detected"
         )
+        disease_id_raw = (
+            data.get("diseaseId")
+            or diagnosis.get("diseaseId")
+            or disease.get("diseaseId")
+        )
+        disease_id = (
+            str(disease_id_raw).strip()
+            if disease_id_raw is not None and str(disease_id_raw).strip()
+            else None
+        )
+        disease_name_ar_raw = (
+            data.get("diseaseNameAr")
+            or diagnosis.get("diseaseNameAr")
+            or disease.get("diseaseNameAr")
+        )
+        disease_name_ar = (
+            str(disease_name_ar_raw).strip()
+            if disease_name_ar_raw is not None and str(disease_name_ar_raw).strip()
+            else _fallback_disease_name_ar(disease_label)
+        )
 
         crop_name = (
             data.get("cropName")
@@ -1012,6 +1064,10 @@ async def get_map_markers(
                 created_at = datetime.now(timezone.utc)
         else:
             created_at = datetime.now(timezone.utc)
+        if start_at is not None and created_at < start_at:
+            continue
+        if end_at is not None and created_at > end_at:
+            continue
 
         markers.append(
             MapMarkerItem(
@@ -1019,6 +1075,9 @@ async def get_map_markers(
                 latitude=lat,
                 longitude=lon,
                 crop_type=str(crop_name),
+                disease_id=disease_id,
+                disease_name=disease_label,
+                disease_name_ar=disease_name_ar,
                 is_healthy=_scan_is_healthy_row(data, disease_label),
                 created_at=created_at,
             )

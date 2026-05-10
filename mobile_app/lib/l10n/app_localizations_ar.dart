@@ -284,6 +284,41 @@ class AppLocalizationsAr extends AppLocalizations {
   String get myLocation => 'موقعي';
 
   @override
+  String get heatmap => 'الخريطة الحرارية';
+
+  @override
+  String get compare => 'مقارنة';
+
+  @override
+  String get allDiseases => 'كل الأمراض';
+
+  @override
+  String get last24h => '24س';
+
+  @override
+  String get last7d => '7أ';
+
+  @override
+  String get last30d => '30أ';
+
+  @override
+  String get devFakeMode => 'وضع بيانات تجريبية';
+
+  @override
+  String get tapToAdd => 'إضافة بالنقر';
+
+  @override
+  String get seedSaudiPoints => 'توليد نقاط سعودية';
+
+  @override
+  String get clearFakeData => 'مسح البيانات التجريبية';
+
+  @override
+  String fakeDataCount(int count) {
+    return 'عدد النقاط التجريبية: $count';
+  }
+
+  @override
   String get unhealthy => 'غير سليم';
 
   @override

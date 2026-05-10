@@ -617,6 +617,72 @@ abstract class AppLocalizations {
   /// **'My location'**
   String get myLocation;
 
+  /// No description provided for @heatmap.
+  ///
+  /// In en, this message translates to:
+  /// **'Heatmap'**
+  String get heatmap;
+
+  /// No description provided for @compare.
+  ///
+  /// In en, this message translates to:
+  /// **'Compare'**
+  String get compare;
+
+  /// No description provided for @allDiseases.
+  ///
+  /// In en, this message translates to:
+  /// **'All diseases'**
+  String get allDiseases;
+
+  /// No description provided for @last24h.
+  ///
+  /// In en, this message translates to:
+  /// **'24h'**
+  String get last24h;
+
+  /// No description provided for @last7d.
+  ///
+  /// In en, this message translates to:
+  /// **'7d'**
+  String get last7d;
+
+  /// No description provided for @last30d.
+  ///
+  /// In en, this message translates to:
+  /// **'30d'**
+  String get last30d;
+
+  /// No description provided for @devFakeMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Dev Fake Mode'**
+  String get devFakeMode;
+
+  /// No description provided for @tapToAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to Add'**
+  String get tapToAdd;
+
+  /// No description provided for @seedSaudiPoints.
+  ///
+  /// In en, this message translates to:
+  /// **'Seed Saudi Points'**
+  String get seedSaudiPoints;
+
+  /// No description provided for @clearFakeData.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear Fake Data'**
+  String get clearFakeData;
+
+  /// No description provided for @fakeDataCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Fake data points: {count}'**
+  String fakeDataCount(int count);
+
   /// No description provided for @unhealthy.
   ///
   /// In en, this message translates to:

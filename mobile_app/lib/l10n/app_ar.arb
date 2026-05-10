@@ -136,6 +136,24 @@
   "findingYourLocation": "جاري تحديد موقعك…",
   "showAllMarkers": "إظهار جميع العلامات",
   "myLocation": "موقعي",
+  "heatmap": "الخريطة الحرارية",
+  "compare": "مقارنة",
+  "allDiseases": "كل الأمراض",
+  "last24h": "24س",
+  "last7d": "7أ",
+  "last30d": "30أ",
+  "devFakeMode": "وضع بيانات تجريبية",
+  "tapToAdd": "إضافة بالنقر",
+  "seedSaudiPoints": "توليد نقاط وهمية",
+  "clearFakeData": "مسح البيانات التجريبية",
+  "fakeDataCount": "عدد النقاط التجريبية: {count}",
+  "@fakeDataCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "unhealthy": "غير سليم",
   "scanDetails": "تفاصيل الفحص",
   "healthStatus": "الحالة الصحية",

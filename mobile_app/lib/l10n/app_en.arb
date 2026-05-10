@@ -136,6 +136,24 @@
   "findingYourLocation": "Finding your location…",
   "showAllMarkers": "Show all markers",
   "myLocation": "My location",
+  "heatmap": "Heatmap",
+  "compare": "Compare",
+  "allDiseases": "All diseases",
+  "last24h": "24h",
+  "last7d": "7d",
+  "last30d": "30d",
+  "devFakeMode": "Dev Fake Mode",
+  "tapToAdd": "Tap to Add",
+  "seedSaudiPoints": "Seed Saudi Points",
+  "clearFakeData": "Clear Fake Data",
+  "fakeDataCount": "Fake data points: {count}",
+  "@fakeDataCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "unhealthy": "Unhealthy",
   "scanDetails": "Scan details",
   "healthStatus": "Health status",

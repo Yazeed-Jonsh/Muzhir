@@ -284,6 +284,41 @@ class AppLocalizationsEn extends AppLocalizations {
   String get myLocation => 'My location';
 
   @override
+  String get heatmap => 'Heatmap';
+
+  @override
+  String get compare => 'Compare';
+
+  @override
+  String get allDiseases => 'All diseases';
+
+  @override
+  String get last24h => '24h';
+
+  @override
+  String get last7d => '7d';
+
+  @override
+  String get last30d => '30d';
+
+  @override
+  String get devFakeMode => 'Dev Fake Mode';
+
+  @override
+  String get tapToAdd => 'Tap to Add';
+
+  @override
+  String get seedSaudiPoints => 'Seed Saudi Points';
+
+  @override
+  String get clearFakeData => 'Clear Fake Data';
+
+  @override
+  String fakeDataCount(int count) {
+    return 'Fake data points: $count';
+  }
+
+  @override
   String get unhealthy => 'Unhealthy';
 
   @override

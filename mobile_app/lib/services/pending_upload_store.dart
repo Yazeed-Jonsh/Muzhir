@@ -38,12 +38,43 @@ class PendingUpload {
       );
 }
 
+/// One synthetic map point used to test heatmap behavior in developer mode.
+class FakeHeatmapPoint {
+  const FakeHeatmapPoint({
+    required this.latitude,
+    required this.longitude,
+    required this.diseaseName,
+    required this.createdAt,
+  });
+
+  final double latitude;
+  final double longitude;
+  final String diseaseName;
+  final DateTime createdAt;
+
+  Map<String, dynamic> toJson() => {
+        'latitude': latitude,
+        'longitude': longitude,
+        'diseaseName': diseaseName,
+        'createdAt': createdAt.toUtc().toIso8601String(),
+      };
+
+  factory FakeHeatmapPoint.fromJson(Map<String, dynamic> json) =>
+      FakeHeatmapPoint(
+        latitude: (json['latitude'] as num).toDouble(),
+        longitude: (json['longitude'] as num).toDouble(),
+        diseaseName: (json['diseaseName'] ?? '').toString().trim(),
+        createdAt: DateTime.parse((json['createdAt'] ?? '').toString()),
+      );
+}
+
 /// Persists two things across sessions:
 /// 1. The last successful map-marker response (for offline display).
 /// 2. A queue of offline scans awaiting upload.
 class PendingUploadStore {
   static const _kMarkerCache = 'muzhir_map_markers_v1';
   static const _kQueue = 'muzhir_pending_uploads_v1';
+  static const _kFakeHeatmapPoints = 'muzhir_fake_heatmap_points_v1';
 
   // ── Marker cache ─────────────────────────────────────────────────────────────
 
@@ -94,5 +125,34 @@ class PendingUploadStore {
   static Future<void> clearQueue() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kQueue);
+  }
+
+  // ── Fake heatmap points (developer testing) ───────────────────────────────────
+
+  static Future<void> saveFakeHeatmapPoints(
+    List<FakeHeatmapPoint> points,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final payload = points.map((p) => p.toJson()).toList();
+    await prefs.setString(_kFakeHeatmapPoints, jsonEncode(payload));
+  }
+
+  static Future<List<FakeHeatmapPoint>> loadFakeHeatmapPoints() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_kFakeHeatmapPoints);
+    if (raw == null) return const [];
+    try {
+      final list = jsonDecode(raw) as List;
+      return list
+          .map((e) => FakeHeatmapPoint.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  static Future<void> clearFakeHeatmapPoints() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kFakeHeatmapPoints);
   }
 }

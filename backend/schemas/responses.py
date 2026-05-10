@@ -101,6 +101,23 @@ class MapMarkerItem(BaseModel):
         description="Crop label for the pin (English display name when available).",
         examples=["Tomato"],
     )
+    disease_id: str | None = Field(
+        default=None,
+        alias="diseaseId",
+        description="Stable disease id from the stored diagnosis when available.",
+        examples=["tomato_early_blight"],
+    )
+    disease_name: str = Field(
+        alias="diseaseName",
+        description="Disease label in English for filtering and map display.",
+        examples=["Early blight"],
+    )
+    disease_name_ar: str | None = Field(
+        default=None,
+        alias="diseaseNameAr",
+        description="Disease label in Arabic when available.",
+        examples=["اللفحة المبكرة"],
+    )
     is_healthy: bool = Field(
         alias="isHealthy",
         description="Whether the stored diagnosis marks the plant as healthy.",
