@@ -57,7 +57,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>يحتاج مُزهِر للوصول للكاميرا لتصوير النباتات وتشخيص الأمراض.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>نحتاج للوصول لموقعك لتحديد أماكن الإصابات بدقة على الخريطة.</string>
+	<string>نحتاج للوصول لموقعك لعرض الطقس المحلي وتحديد أماكن الإصابات بدقة على الخريطة.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
 	<string>قد نحتاج للوصول لموقعك في الخلفية لعرض الخريطة وتحديثات الموقع ذات الصلة بالإصابات.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

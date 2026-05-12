@@ -124,6 +124,7 @@
   "jeddahSaudiArabia": "Jeddah, Saudi Arabia",
   "wind": "Wind",
   "humidity": "Humidity",
+  "weatherUnavailable": "Weather unavailable",
   "recentScans": "Recent Scans",
   "yesterday": "Yesterday",
   "all": "All",

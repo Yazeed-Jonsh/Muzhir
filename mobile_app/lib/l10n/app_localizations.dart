@@ -545,6 +545,12 @@ abstract class AppLocalizations {
   /// **'Humidity'**
   String get humidity;
 
+  /// No description provided for @weatherUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Weather unavailable'**
+  String get weatherUnavailable;
+
   /// No description provided for @recentScans.
   ///
   /// In en, this message translates to:

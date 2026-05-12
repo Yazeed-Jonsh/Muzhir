@@ -248,6 +248,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get humidity => 'الرطوبة';
 
   @override
+  String get weatherUnavailable => 'الطقس غير متاح';
+
+  @override
   String get recentScans => 'الفحوصات الأخيرة';
 
   @override

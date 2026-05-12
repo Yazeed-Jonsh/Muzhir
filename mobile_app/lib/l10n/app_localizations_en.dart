@@ -248,6 +248,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get humidity => 'Humidity';
 
   @override
+  String get weatherUnavailable => 'Weather unavailable';
+
+  @override
   String get recentScans => 'Recent Scans';
 
   @override

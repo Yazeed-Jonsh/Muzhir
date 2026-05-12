@@ -124,6 +124,7 @@
   "jeddahSaudiArabia": "جدة، المملكة العربية السعودية",
   "wind": "الرياح",
   "humidity": "الرطوبة",
+  "weatherUnavailable": "الطقس غير متاح",
   "recentScans": "الفحوصات الأخيرة",
   "yesterday": "أمس",
   "all": "الكل",
