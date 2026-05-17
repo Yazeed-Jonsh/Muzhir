@@ -394,8 +394,12 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
   /// On-device inference path (offline / YOLO26n).
   Future<void> _analyzeOnDevice() async {
     try {
-      final result =
-          await InferenceService.instance.runInference(_selectedImage!);
+      final result = await InferenceService.instance.runInference(
+        _selectedImage!,
+        modelPath: Platform.isIOS ? null : 'muzhir_fp16.tflite',
+        confidenceThreshold: 0.15,
+        iouThreshold: 0.7,
+      );
       if (!mounted) return;
       setState(() {
         _isAnalyzing = false;

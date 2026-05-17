@@ -75,3 +75,4 @@ backend/assets/muzhir_ios_coreml/
 **/__pycache__/
 *.py[cod]
 *.pyc
+*.md 

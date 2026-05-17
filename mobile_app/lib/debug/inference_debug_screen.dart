@@ -84,12 +84,12 @@ class _InferenceDebugScreenState extends ConsumerState<InferenceDebugScreen> {
   /// Runs inference using a specific model file from Android native assets.
   /// On iOS this always uses the compiled CoreML model; the toggle is Android-only.
   Future<OnDeviceResult> _runWithModel(File image, String model) async {
-    // For the debug screen we call InferenceService normally; the model file
-    // selection happens in InferenceService._modelPath. To switch between
-    // fp16 / int8 at runtime, the simplest approach is to subclass or patch
-    // InferenceService. For this debug screen we note the active model and
-    // call runInference directly.
-    return InferenceService.instance.runInference(image);
+    return InferenceService.instance.runInference(
+      image,
+      modelPath: Platform.isIOS ? null : model,
+      confidenceThreshold: 0.15,
+      iouThreshold: 0.7,
+    );
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────
@@ -138,6 +138,8 @@ class _InferenceDebugScreenState extends ConsumerState<InferenceDebugScreen> {
             if (_lastResult != null) ...[
               const SizedBox(height: 16),
               _buildMetricsCard(_lastResult!),
+              const SizedBox(height: 12),
+              _buildTopRawPredictionsCard(_lastResult!),
               const SizedBox(height: 12),
               _buildDetectionsCard(_lastResult!.detections),
             ],
@@ -276,24 +278,31 @@ class _InferenceDebugScreenState extends ConsumerState<InferenceDebugScreen> {
 
   Widget _buildMetricsCard(OnDeviceResult result) {
     final rows = <_MetricRow>[
-      _MetricRow('Detections (raw)', '${result.detections.length}'),
+      _MetricRow('Model path', result.modelPath),
+      _MetricRow('Input bytes', '${result.inputBytesCount}'),
+      _MetricRow('Raw boxes (native)', '${result.rawBoxCount}'),
+      _MetricRow('Mapped detections (Dart)', '${result.detections.length}'),
       _MetricRow(
         'Detections (≥50% conf)',
         '${result.detections.where((d) => d.confidence >= 0.5).length}',
       ),
-      _MetricRow('Inference time (plugin)', '${result.inferenceMs.toStringAsFixed(1)} ms'),
+      _MetricRow('Inference time (plugin)',
+          '${result.inferenceMs.toStringAsFixed(1)} ms'),
       _MetricRow('Wall-clock total', '${result.totalMs.toStringAsFixed(1)} ms'),
       _MetricRow('Delegate', result.delegate),
-      _MetricRow('Platform', Platform.isIOS ? 'iOS (CoreML/ANE)' : 'Android (TFLite)'),
+      _MetricRow(
+        'Native thresholds',
+        'conf ${result.confidenceThreshold} | iou ${result.iouThreshold}',
+      ),
+      _MetricRow(
+          'Platform', Platform.isIOS ? 'iOS (CoreML/ANE)' : 'Android (TFLite)'),
     ];
 
     return _DebugCard(
       title: 'Performance Metrics',
       icon: Icons.speed_rounded,
       child: Column(
-        children: rows
-            .map((r) => _buildMetricTile(r.label, r.value))
-            .toList(),
+        children: rows.map((r) => _buildMetricTile(r.label, r.value)).toList(),
       ),
     );
   }
@@ -343,6 +352,39 @@ class _InferenceDebugScreenState extends ConsumerState<InferenceDebugScreen> {
                   .asMap()
                   .entries
                   .map((e) => _buildDetectionTile(e.key + 1, e.value))
+                  .toList(),
+            ),
+    );
+  }
+
+  Widget _buildTopRawPredictionsCard(OnDeviceResult result) {
+    return _DebugCard(
+      title: 'Top Raw Predictions (native)',
+      icon: Icons.analytics_outlined,
+      child: result.topRawPredictions.isEmpty
+          ? Text(
+              'No raw predictions found.',
+              style: GoogleFonts.lexend(
+                fontSize: 13,
+                color: MuzhirColors.mutedGrey,
+              ),
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: result.topRawPredictions
+                  .map(
+                    (line) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Text(
+                        line,
+                        style: GoogleFonts.lexend(
+                          fontSize: 12,
+                          color: MuzhirColors.titleCharcoal,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  )
                   .toList(),
             ),
     );
