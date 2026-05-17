@@ -1,0 +1,52 @@
+{
+  "images_count": 338,
+  "predict_conf": 0.001,
+  "app_conf_threshold": 0.25,
+  "repeats_per_image": 2,
+  "results": {
+    "fp16_tflite": {
+      "model": "fp16_tflite",
+      "model_path": "D:\\2026 F2\\CPCS499\\Muzhir\\mobile_app\\assets\\models\\muzhir_fp16.tflite",
+      "summary": {
+        "total_images": 338,
+        "labeled_images": 321,
+        "unlabeled_images": 17,
+        "top1_hit_raw": 317,
+        "top1_hit_app_thr": 310,
+        "predicted_raw": 320,
+        "predicted_app_thr": 313,
+        "unstable_repeat_count": 0
+      },
+      "metrics": {
+        "top1_hit_rate_raw_on_labeled": 0.9875,
+        "top1_hit_rate_app_thr_on_labeled": 0.9657,
+        "precision_raw_on_predicted": 0.9906,
+        "precision_app_thr_on_predicted": 0.9904,
+        "repeat_instability_rate": 0.0
+      },
+      "sample_unstable_images": []
+    },
+    "onnx_backend": {
+      "model": "onnx_backend",
+      "model_path": "D:\\2026 F2\\CPCS499\\Muzhir\\backend\\assets\\best.onnx",
+      "summary": {
+        "total_images": 338,
+        "labeled_images": 321,
+        "unlabeled_images": 17,
+        "top1_hit_raw": 317,
+        "top1_hit_app_thr": 310,
+        "predicted_raw": 320,
+        "predicted_app_thr": 313,
+        "unstable_repeat_count": 0
+      },
+      "metrics": {
+        "top1_hit_rate_raw_on_labeled": 0.9875,
+        "top1_hit_rate_app_thr_on_labeled": 0.9657,
+        "precision_raw_on_predicted": 0.9906,
+        "precision_app_thr_on_predicted": 0.9904,
+        "repeat_instability_rate": 0.0
+      },
+      "sample_unstable_images": []
+    }
+  }
+}

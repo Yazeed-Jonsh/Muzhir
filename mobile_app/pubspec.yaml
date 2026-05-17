@@ -31,10 +31,11 @@ dependencies:
   url_launcher: ^6.3.1
   flutter_dotenv: ^5.2.1
   # ── On-Device Inference ────────────────────────────────────────────────
-  ultralytics_yolo: ^0.3.0
+  ultralytics_yolo: ^0.3.4
   # ── Image Utils ───────────────────────────────────────────────────────
   gal: ^2.3.0
   shared_preferences: ^2.5.5
+  image: ^4.8.0
 
 dev_dependencies:
   flutter_test:

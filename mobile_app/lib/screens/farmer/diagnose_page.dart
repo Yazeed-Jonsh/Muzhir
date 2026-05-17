@@ -397,7 +397,7 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
       final result = await InferenceService.instance.runInference(
         _selectedImage!,
         modelPath: Platform.isIOS ? null : 'muzhir_fp16.tflite',
-        confidenceThreshold: 0.15,
+        confidenceThreshold: 0.25,
         iouThreshold: 0.7,
       );
       if (!mounted) return;

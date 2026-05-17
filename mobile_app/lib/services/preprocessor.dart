@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:image/image.dart' as img;
+
 /// Converts a [File] produced by [image_picker] into the raw bytes that
 /// [ultralytics_yolo] `YOLO.predict()` expects.
 ///
@@ -24,6 +26,20 @@ class Preprocessor {
         imageFile.path,
       );
     }
-    return imageFile.readAsBytes();
+    final original = await imageFile.readAsBytes();
+    final decoded = img.decodeImage(original);
+    if (decoded == null) return original;
+
+    // Normalize orientation from EXIF so model input matches what users see.
+    final oriented = img.bakeOrientation(decoded);
+    // Keep offline path deterministic and aligned with backend preprocessing.
+    final resized = img.copyResize(
+      oriented,
+      width: 640,
+      height: 640,
+      interpolation: img.Interpolation.linear,
+    );
+    final encoded = img.encodeJpg(resized, quality: 95);
+    return Uint8List.fromList(encoded);
   }
 }

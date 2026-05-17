@@ -116,8 +116,8 @@ class InferenceService {
     final resolvedModelPath = modelPath ?? _defaultModelPath;
     if (_yolo != null && _loadedModelPath == resolvedModelPath) return;
 
-    // ultralytics_yolo 0.3.0 accepts thresholds per prediction; keep the
-    // native threshold lower than the Dart mapper so we can preserve recall.
+    // Keep native threshold aligned with OutputMapper to avoid confusing cases
+    // where native returns weak boxes that are later dropped by Dart filtering.
     final yolo = YOLO(
       modelPath: resolvedModelPath,
       task: YOLOTask.detect,
@@ -145,7 +145,7 @@ class InferenceService {
   Future<OnDeviceResult> runInference(
     File imageFile, {
     String? modelPath,
-    double confidenceThreshold = 0.15,
+    double confidenceThreshold = 0.25,
     double iouThreshold = 0.7,
   }) async {
     await initialize(modelPath: modelPath);
