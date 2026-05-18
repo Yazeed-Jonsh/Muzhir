@@ -27,8 +27,9 @@ class OutputMapper {
   /// [labels]    — label map from [LabelLoader.load()].
   static List<DiseaseDetection> map(
     List<dynamic> rawBoxes,
-    Map<int, LabelEntry> labels,
-  ) {
+    Map<int, LabelEntry> labels, {
+    String? selectedCrop,
+  }) {
     final results = <DiseaseDetection>[];
 
     final labelsByName = {
@@ -39,7 +40,7 @@ class OutputMapper {
     for (final raw in rawBoxes) {
       if (raw is! Map) continue;
       final box = Map<dynamic, dynamic>.from(raw);
-      final confidence = _readDouble(box['confidence']);
+      final confidence = _readConfidence(box['confidence']);
       if (confidence == null) continue;
       if (confidence < confidenceThreshold) continue;
 
@@ -63,7 +64,25 @@ class OutputMapper {
     }
 
     results.sort((a, b) => b.confidence.compareTo(a.confidence));
-    return results;
+    return filterByCrop(results, selectedCrop);
+  }
+
+  /// Keeps only detections whose [DiseaseDetection.classId] matches [cropDisplay].
+  static List<DiseaseDetection> filterByCrop(
+    List<DiseaseDetection> detections,
+    String? cropDisplay,
+  ) {
+    final allowed = _classIdsForCrop(cropDisplay);
+    if (allowed == null) return detections;
+    return detections.where((d) => allowed.contains(d.classId)).toList();
+  }
+
+  static Set<int>? _classIdsForCrop(String? cropDisplay) {
+    final crop = cropDisplay?.trim().toLowerCase() ?? '';
+    if (crop.isEmpty) return null;
+    if (crop.contains('corn')) return {0, 1, 2, 3, 4};
+    if (crop.contains('tomato')) return {5, 6, 7};
+    return null;
   }
 
   static MapEntry<int, LabelEntry>? _resolveLabel(
@@ -71,17 +90,55 @@ class OutputMapper {
     Map<int, LabelEntry> labels,
     Map<String, MapEntry<int, LabelEntry>> labelsByName,
   ) {
+    // ultralytics_yolo 0.3.4 puts the class *name* in `class` / `className` and
+    // does not always send `classIndex` on the `boxes` list — resolve by name first.
+    final className = _readString(box['className']) ??
+        _readString(box['class']);
+    if (className != null) {
+      final byName =
+          labelsByName[_normalizeLabel(_stripEmbeddedConfidence(className))];
+      if (byName != null) return byName;
+    }
+
     final classId = _readInt(box['classIndex']) ??
-        _readInt(box['class']) ??
-        _readInt(box['id']);
+        _readInt(box['index']) ??
+        _readInt(box['id']) ??
+        _readClassIndex(box['class']);
     if (classId != null && labels[classId] != null) {
       return MapEntry(classId, labels[classId]!);
     }
 
-    final className =
-        _readString(box['className']) ?? _readString(box['class']);
-    if (className == null) return null;
-    return labelsByName[_normalizeLabel(className)];
+    return null;
+  }
+
+  /// Treats `class` as an index only when it is numeric (not a label string).
+  static int? _readClassIndex(Object? value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) {
+      final trimmed = value.trim();
+      if (RegExp(r'^\d+$').hasMatch(trimmed)) {
+        return int.tryParse(trimmed);
+      }
+    }
+    return null;
+  }
+
+  /// Native layers occasionally return 0–100 instead of 0–1.
+  static double? _readConfidence(Object? value) {
+    final raw = _readDouble(value);
+    if (raw == null) return null;
+    if (raw > 1.0) {
+      if (raw <= 100.0) return (raw / 100.0).clamp(0.0, 1.0);
+      return 1.0;
+    }
+    return raw.clamp(0.0, 1.0);
+  }
+
+  static String _stripEmbeddedConfidence(String value) {
+    return value
+        .replaceAll(RegExp(r'\s+\d{1,3}(?:\.\d+)?\s*%?\s*$'), '')
+        .trim();
   }
 
   static Rect? _readNormalizedRect(Map<dynamic, dynamic> box) {

@@ -147,6 +147,7 @@ class InferenceService {
     String? modelPath,
     double confidenceThreshold = 0.25,
     double iouThreshold = 0.7,
+    String? selectedCrop,
   }) async {
     await initialize(modelPath: modelPath);
 
@@ -162,7 +163,11 @@ class InferenceService {
 
     final labels = await LabelLoader.load();
     final rawBoxes = raw['boxes'] as List<dynamic>? ?? [];
-    final detections = OutputMapper.map(rawBoxes, labels);
+    final detections = OutputMapper.map(
+      rawBoxes,
+      labels,
+      selectedCrop: selectedCrop,
+    );
     final topRawPredictions = _extractTopRawPredictions(rawBoxes, limit: 5);
     final resolvedModelPath = modelPath ?? _defaultModelPath;
 
@@ -203,11 +208,12 @@ class InferenceService {
       final box = Map<dynamic, dynamic>.from(raw);
       final confidence = _readDouble(box['confidence']) ?? -1.0;
       if (confidence < 0) continue;
-      final classId = _readInt(box['classIndex']) ??
-          _readInt(box['class']) ??
-          _readInt(box['id']);
       final className =
           box['className']?.toString() ?? box['class']?.toString();
+      final classId = _readInt(box['classIndex']) ??
+          _readInt(box['index']) ??
+          _readInt(box['id']) ??
+          _readNumericClassIndex(box['class']);
       rows.add(
         _RawPrediction(
             classId: classId, className: className, confidence: confidence),
@@ -227,6 +233,18 @@ class InferenceService {
     if (value is int) return value;
     if (value is num) return value.toInt();
     if (value is String) return int.tryParse(value.trim());
+    return null;
+  }
+
+  static int? _readNumericClassIndex(Object? value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) {
+      final trimmed = value.trim();
+      if (RegExp(r'^\d+$').hasMatch(trimmed)) {
+        return int.tryParse(trimmed);
+      }
+    }
     return null;
   }
 

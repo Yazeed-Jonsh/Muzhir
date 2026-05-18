@@ -399,6 +399,7 @@ class _DiagnosePageState extends ConsumerState<DiagnosePage> {
         modelPath: Platform.isIOS ? null : 'muzhir_fp16.tflite',
         confidenceThreshold: 0.25,
         iouThreshold: 0.7,
+        selectedCrop: _selectedCrop,
       );
       if (!mounted) return;
       setState(() {

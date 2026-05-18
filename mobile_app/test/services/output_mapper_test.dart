@@ -126,4 +126,75 @@ void main() {
 
     expect(detections.map((d) => d.classId), [7, 0]);
   });
+
+  test('prefers class name over numeric class field (plugin 0.3.4 contract)', () {
+    final detections = OutputMapper.map(
+      [
+        {
+          'class': 'Tomato Leaf Curling',
+          'className': 'Tomato Leaf Curling',
+          'classIndex': 0,
+          'confidence': 0.9,
+          'x1_norm': 0.1,
+          'y1_norm': 0.1,
+          'x2_norm': 0.5,
+          'y2_norm': 0.5,
+        },
+      ],
+      labels,
+    );
+
+    expect(detections.single.classId, 6);
+    expect(detections.single.labelEn, 'Tomato Leaf Curling');
+  });
+
+  test('normalizes percent-scale confidence and strips embedded label suffix', () {
+    final detections = OutputMapper.map(
+      [
+        {
+          'class': 'Tomato Mildiou 94%',
+          'className': 'Tomato Mildiou 94%',
+          'confidence': 94,
+          'x1_norm': 0.2,
+          'y1_norm': 0.2,
+          'x2_norm': 0.7,
+          'y2_norm': 0.7,
+        },
+      ],
+      labels,
+    );
+
+    expect(detections, hasLength(1));
+    expect(detections.single.classId, 7);
+    expect(detections.single.labelEn, 'Tomato Mildiou');
+    expect(detections.single.confidencePercent, 94);
+  });
+
+  test('filters detections by selected crop', () {
+    final detections = OutputMapper.map(
+      [
+        {
+          'className': 'Corn Blight',
+          'confidence': 0.95,
+          'x1_norm': 0.0,
+          'y1_norm': 0.0,
+          'x2_norm': 0.4,
+          'y2_norm': 0.4,
+        },
+        {
+          'className': 'Tomato Mildiou',
+          'confidence': 0.8,
+          'x1_norm': 0.5,
+          'y1_norm': 0.5,
+          'x2_norm': 0.9,
+          'y2_norm': 0.9,
+        },
+      ],
+      labels,
+      selectedCrop: 'Tomato',
+    );
+
+    expect(detections, hasLength(1));
+    expect(detections.single.classId, 7);
+  });
 }
