@@ -1,17 +1,12 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:image/image.dart' as img;
-
 /// Converts a [File] produced by [image_picker] into the raw bytes that
 /// [ultralytics_yolo] `YOLO.predict()` expects.
 ///
-/// The `ultralytics_yolo` native layer handles all further preprocessing
-/// internally (resize to 640×640, normalisation, channel ordering, EXIF
-/// orientation) so this class only needs to read the bytes.
-///
-/// If we ever switch to manual `tflite_flutter`, this is the single place
-/// to add resize + normalisation + EXIF correction.
+/// The `ultralytics_yolo` native layer owns preprocessing: image decode,
+/// orientation handling, letterbox resize, RGB normalisation, and tensor
+/// preparation. This class intentionally performs file I/O only.
 class Preprocessor {
   Preprocessor._();
 
@@ -26,20 +21,6 @@ class Preprocessor {
         imageFile.path,
       );
     }
-    final original = await imageFile.readAsBytes();
-    final decoded = img.decodeImage(original);
-    if (decoded == null) return original;
-
-    // Normalize orientation from EXIF so model input matches what users see.
-    final oriented = img.bakeOrientation(decoded);
-    // Keep offline path deterministic and aligned with backend preprocessing.
-    final resized = img.copyResize(
-      oriented,
-      width: 640,
-      height: 640,
-      interpolation: img.Interpolation.linear,
-    );
-    final encoded = img.encodeJpg(resized, quality: 95);
-    return Uint8List.fromList(encoded);
+    return imageFile.readAsBytes();
   }
 }
